@@ -376,3 +376,115 @@ test("Vite proxy preserves browser host for authenticated POST requests", async 
     403,
   );
 });
+
+test("live routing uses OSM street tags, caches requests and never substitutes a demo on failure", async () => {
+  const { routeRequest } = await import("../backend/routing.mjs");
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  const elements = [
+    { type: "node", id: 101, lat: 12.97, lon: 77.59 },
+    { type: "node", id: 102, lat: 12.97, lon: 77.591 },
+    { type: "node", id: 103, lat: 12.97, lon: 77.592 },
+    { type: "node", id: 104, lat: 12.971, lon: 77.59 },
+    { type: "node", id: 105, lat: 12.971, lon: 77.592 },
+    {
+      type: "node",
+      id: 106,
+      lat: 12.9705,
+      lon: 77.59,
+      tags: { amenity: "cafe" },
+    },
+    {
+      type: "node",
+      id: 107,
+      lat: 12.971,
+      lon: 77.591,
+      tags: { shop: "convenience" },
+    },
+    {
+      type: "way",
+      nodes: [101, 102, 103],
+      tags: { highway: "residential", name: "Direct street", lit: "no" },
+    },
+    {
+      type: "way",
+      nodes: [101, 104, 105, 103],
+      tags: { highway: "footway", name: "Lit promenade", lit: "yes" },
+    },
+    {
+      type: "way",
+      nodes: [101, 103],
+      tags: {
+        highway: "service",
+        access: "private",
+        name: "Private shortcut",
+        lit: "yes",
+      },
+    },
+  ];
+  try {
+    globalThis.fetch = async (url, options) => {
+      requests++;
+      assert.equal(url, "https://overpass-api.de/api/interpreter");
+      assert.match(options.body.get("data"), /way\[highway\]/);
+      return new Response(JSON.stringify({ elements }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    };
+    const input = {
+      mode: "live",
+      origin: [12.97, 77.59],
+      destination: [12.97, 77.592],
+    };
+    const result = await routeRequest(input);
+    assert.equal(result.mode, "live");
+    assert.match(result.attribution, /OpenStreetMap/);
+    assert.ok(result.source.fetchedAt);
+    assert.ok(result.weighted.cost <= result.shortest.cost);
+    assert.notDeepEqual(
+      result.weighted.coordinates,
+      result.shortest.coordinates,
+    );
+    assert.equal(result.weighted.lit_percent, 100);
+    assert.ok(result.weighted.segments.some((e) => e.activity > 0));
+    assert.ok(!result.network.edges.some((e) => e.name === "Private shortcut"));
+    await routeRequest(input);
+    assert.equal(requests, 1);
+    globalThis.fetch = async () => {
+      throw new Error("Provider offline");
+    };
+    await assert.rejects(
+      () => routeRequest({ ...input, origin: [12.9702, 77.59] }),
+      (e) => e.status === 503 && /unavailable/.test(e.message),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("map coordinates and tile projection round trip without external tile downloads", async () => {
+  const { parseCoordinates, project, unproject, fitMap } =
+    await import("../src/lib/map.mjs");
+  assert.deepEqual(parseCoordinates("12.97, 77.59"), [12.97, 77.59]);
+  for (const value of ["", ",", "91,0", "12,77,9", "text,77"])
+    assert.throws(() => parseCoordinates(value));
+  for (const point of [
+    [0, 0],
+    [12.97, 77.59],
+    [-40, 100],
+  ]) {
+    const restored = unproject(project(point, 15), 15);
+    assert.ok(Math.abs(restored[0] - point[0]) < 1e-9);
+    assert.ok(Math.abs(restored[1] - point[1]) < 1e-9);
+  }
+  const view = fitMap(
+    [
+      [12.97, 77.59],
+      [12.98, 77.6],
+    ],
+    400,
+    400,
+  );
+  assert.ok(view.zoom >= 2 && view.zoom <= 17);
+});

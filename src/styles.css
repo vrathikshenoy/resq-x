@@ -2047,3 +2047,86 @@ th {
     gap: 12px;
   }
 }
+.osm-map-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  background: #e8eeea;
+}
+.osm-map {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+.osm-map.picking {
+  cursor: crosshair;
+}
+.osm-map:active {
+  cursor: grabbing;
+}
+.osm-map > img {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+.osm-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.osm-controls {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  display: grid;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 9px #17382e24;
+  overflow: hidden;
+}
+.osm-controls button {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-bottom: 1px solid #e2e9e4;
+  background: #fff;
+  font-size: 23px;
+  color: #296653;
+}
+.osm-attribution {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  padding: 5px 8px;
+  background: #fffffff0;
+  font-size: 10px;
+  color: #285c51;
+  z-index: 2;
+}
+.map-pick-hint,
+.map-tile-error {
+  position: absolute;
+  left: 12px;
+  bottom: 33px;
+  max-width: calc(100% - 24px);
+  background: #fffffff0;
+  padding: 10px 13px;
+  border-radius: 7px;
+  font-size: 11px;
+  box-shadow: 0 2px 10px #183b2b1a;
+  pointer-events: none;
+}
+.map-tile-error {
+  top: 12px;
+  bottom: auto;
+  max-width: calc(100% - 85px);
+  color: #896b35;
+  background: #fff9ecf0;
+}
+.map-point-button {
+  margin: 0 0 17px 12px;
+}

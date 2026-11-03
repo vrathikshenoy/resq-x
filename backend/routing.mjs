@@ -143,6 +143,10 @@ async function liveGraph(origin, destination) {
     );
   }
   const graph = graphFromOSM(elements);
+  graph.source = {
+    provider: "OpenStreetMap / Overpass",
+    fetchedAt: new Date().toISOString(),
+  };
   if (!Object.keys(graph.nodes).length)
     fail(422, "No walkable streets were found in this area.");
   if (cache.size >= 10) cache.delete(cache.keys().next().value);
@@ -191,6 +195,7 @@ export async function routeRequest(data) {
     fail(422, "Choose different start and destination points.");
   return {
     mode,
+    source: graph.source,
     shortest: shortestPath(graph, start, end, false),
     weighted: shortestPath(graph, start, end, true),
     network: graph,

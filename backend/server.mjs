@@ -210,7 +210,7 @@ export function createApp(featureHandler = handleFeature) {
       const bytes = await readFile(file);
       res.setHeader(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https://tile.openstreetmap.org; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
       );
       res.writeHead(200, {
         "Content-Type": mime[extname(file)] || "application/octet-stream",

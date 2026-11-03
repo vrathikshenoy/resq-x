@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   MapPin,
   ArrowRight,
@@ -9,6 +9,8 @@ import {
   Info,
 } from "lucide-react";
 import { api } from "./api";
+import { OSMMap } from "./OSMMap";
+import { parseCoordinates } from "./lib/map.mjs";
 import {
   demoRoute,
   demoPlaces as places,
@@ -16,30 +18,51 @@ import {
   type Point,
 } from "../shared/routing.mjs";
 export function Routes() {
-  const [mode, setMode] = useState("demo"),
+  const [mode, setMode] = useState(navigator.onLine ? "live" : "demo"),
     [origin, setOrigin] = useState("0"),
     [destination, setDestination] = useState("15"),
-    [from, setFrom] = useState("12.975, 77.590"),
-    [to, setTo] = useState("12.9705, 77.5948"),
+    [from, setFrom] = useState(""),
+    [to, setTo] = useState(""),
     [result, setResult] = useState<Result | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [selected, setSelected] = useState<"weighted" | "shortest">("weighted");
+  const [picking, setPicking] = useState<"origin" | "destination" | null>(null);
+  const readPoint = (value: string) => {
+    try {
+      return parseCoordinates(value);
+    } catch {
+      return null;
+    }
+  };
+  const currentJourney = useRef("");
+  currentJourney.current = JSON.stringify([
+    mode,
+    from,
+    to,
+    origin,
+    destination,
+  ]);
+  useEffect(() => {
+    setResult(null);
+  }, [from, to]);
   async function calculate() {
+    const requestedJourney = currentJourney.current;
+    setPicking(null);
     setBusy(true);
     setError("");
     setResult(null);
     try {
-      const coords = (s: string) => s.split(",").map(Number);
-      setResult(
+      const coords = parseCoordinates;
+      const response =
         mode === "demo"
           ? demoRoute(origin, destination)
           : await api<Result>("/navigation/route", {
               mode,
               origin: coords(from),
               destination: coords(to),
-            }),
-      );
+            });
+      if (requestedJourney === currentJourney.current) setResult(response);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -47,7 +70,7 @@ export function Routes() {
     }
   }
   useEffect(() => {
-    void calculate();
+    if (mode === "demo") void calculate();
   }, []);
   function useLocation() {
     setError("");
@@ -77,18 +100,23 @@ export function Routes() {
           </div>
           <div className="segmented" aria-label="Route data source">
             <button
+              disabled={busy}
               className={mode === "demo" ? "chosen" : ""}
               onClick={() => {
                 setMode("demo");
-                setResult(null);
+                setPicking(null);
+                setError("");
+                setResult(demoRoute(origin, destination));
               }}
             >
               Offline demo
             </button>
             <button
+              disabled={busy}
               className={mode === "live" ? "chosen" : ""}
               onClick={() => {
                 setMode("live");
+                setError("");
                 setResult(null);
               }}
             >
@@ -165,6 +193,13 @@ export function Routes() {
                   <LocateFixed size={14} />
                   Use my location
                 </button>
+                <button
+                  className="text-button map-point-button"
+                  type="button"
+                  onClick={() => setPicking("origin")}
+                >
+                  Set start on map
+                </button>
                 <label>
                   Destination: latitude, longitude
                   <input
@@ -174,9 +209,18 @@ export function Routes() {
                     placeholder="12.9705, 77.5948"
                   />
                 </label>
+                <button
+                  className="text-button map-point-button"
+                  type="button"
+                  onClick={() => setPicking("destination")}
+                >
+                  Set destination on map
+                </button>
                 <p className="small-text">
                   Within 3 km. Coordinates are sent to this server; a bounding
-                  area is sent to OpenStreetMap’s Overpass service.
+                  area is sent to OpenStreetMap’s Overpass service. Map tiles
+                  are loaded from OpenStreetMap. Routes snap to mapped
+                  walking-network nodes within 250 m of your points.
                 </p>
               </>
             )}
@@ -197,28 +241,43 @@ export function Routes() {
           </p>
         </section>
         <section className="map-panel">
-          {result ? (
+          {mode === "live" ? (
+            <OSMMap
+              origin={readPoint(from)}
+              destination={readPoint(to)}
+              result={result?.mode === "live" ? result : null}
+              selected={selected}
+              picking={picking}
+              onPick={(point) => {
+                const value = point.map((v) => v.toFixed(6)).join(", ");
+                if (picking === "origin") setFrom(value);
+                else setTo(value);
+                setPicking(null);
+                setResult(null);
+              }}
+            />
+          ) : result ? (
             <RouteMap result={result} selected={selected} />
           ) : (
             <div className="map-loading">
               <MapPin size={36} />
-              <p>
-                {busy
-                  ? "Finding the paths…"
-                  : "Choose your journey and compare routes."}
-              </p>
+              <p>Choose sample locations and compare routes.</p>
             </div>
           )}
-          <span className="map-source">
-            {result?.attribution || "Walking route comparison"}
-          </span>
-          <div className="map-north">
-            <span>N</span>↑
-          </div>
         </section>
       </div>
       {result && (
         <>
+          {result.source && (
+            <div className="notice">
+              <strong>Real OpenStreetMap street data</strong>
+              <br />
+              {Object.keys(result.network.nodes).length} mapped nodes ·{" "}
+              {result.network.edges.length} directed segments. Retrieved{" "}
+              {new Date(result.source.fetchedAt).toLocaleString()}. Unknown
+              lighting remains unknown.
+            </div>
+          )}
           <div className="route-options">
             {(["weighted", "shortest"] as const).map((key) => {
               const r = result[key];

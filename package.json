@@ -16,7 +16,8 @@
     "test:e2e": "node tests/browser.mjs",
     "native:sync": "npm run build && npx --no-install cap sync",
     "native:android": "npx --no-install cap open android",
-    "native:ios": "npx --no-install cap open ios"
+    "native:ios": "npx --no-install cap open ios",
+    "test:live": "node scripts/check-live-routing.mjs"
   },
   "dependencies": {
     "react": "19.1.0",

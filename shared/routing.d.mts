@@ -18,6 +18,7 @@ export type Path = {
 };
 export type Graph = { nodes: Record<string, Point>; edges: Segment[] };
 export type RouteResult = {
+  source?: { provider: string; fetchedAt: string };
   mode: string;
   shortest: Path;
   weighted: Path;
