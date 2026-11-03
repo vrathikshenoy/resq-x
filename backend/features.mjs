@@ -1,6 +1,6 @@
 import { contactFeatures } from "./contacts.mjs";
 import { routeRequest, demoPlaces } from "./routing.mjs";
-import { json } from "./server.mjs";
+import { json } from "./http.mjs";
 export async function features(c) {
   if (contactFeatures(c)) return true;
   if (c.path === "/api/v1/navigation/places" && c.method === "GET") {

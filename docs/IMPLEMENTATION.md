@@ -34,6 +34,6 @@ Run Python unittest tests for authentication, isolation, contact input, idempote
 
 ## Final outcome
 
-All seven implementation stages completed as prototype code, with separate feature commits. Eight API/algorithm test groups and the production build pass. Routing and audio phrase logic are shared between runtime and tests. PWA packaging caches only public shell assets. `README.md` documents actual behavior and explicit simulations.
+All seven implementation stages completed as prototype code, with separate feature commits. Nine API/algorithm/startup test groups and the production build pass. Routing and audio phrase logic are shared between runtime and tests. PWA packaging caches only public shell assets. `README.md` documents actual behavior and explicit simulations.
 
 Execution-environment limits prevented real HTTP serving, Chromium launch, native SDK builds and external API/device checks; these remain unverified rather than marked passed. The native target is a hosted-PWA Capacitor wrapper, with background sensor support deferred. A repeatable browser flow is supplied for a normal local environment.

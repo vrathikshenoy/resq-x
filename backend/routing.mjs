@@ -1,4 +1,4 @@
-import { fail } from "./server.mjs";
+import { fail } from "./http.mjs";
 import {
   distance,
   lighting,

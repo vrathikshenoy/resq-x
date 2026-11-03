@@ -135,7 +135,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-**Verified here:** eight test groups pass, covering authentication, origin/content-type/object validation, account isolation, contact edits/verification/duplicates, alert idempotency and location input, route scoring/disconnection/access, photo perturbation bounds and file signatures, tracking persistence/trust/bounded history, and audio buffer/phrase matching. TypeScript checking and the Vite production build pass. PWA build emits a versioned offline cache.
+**Verified here:** nine test groups pass, covering authentication, origin/content-type/object validation, account isolation, contact edits/verification/duplicates, alert idempotency and location input, route scoring/disconnection/access, photo perturbation bounds and file signatures, tracking persistence/trust/bounded history, audio buffer/phrase matching, and actual backend entry-point initialization (with socket binding stubbed). TypeScript checking and the Vite production build pass. PWA build emits a versioned offline cache.
 
 **Not verified here:** real HTTP/browser end-to-end operation, visual layout, service-worker offline reload, microphone/BLE/GPS hardware, live Overpass requests, clean dependency installation and Android/iOS builds. The execution sandbox rejects local listening sockets and Chromium launch. The connected-browser check also timed out. `tests/browser.mjs` supplies a repeatable end-to-end flow including contacts, countdown cancel/confirmation, image download, route/tracker/audio demos, mobile overflow and offline routing; it was not successfully run here.
 
