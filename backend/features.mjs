@@ -1,1 +1,2 @@
-export async function features(){return false;}
+import {contactFeatures} from './contacts.mjs';
+export async function features(context){return contactFeatures(context);}

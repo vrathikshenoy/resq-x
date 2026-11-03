@@ -23,3 +23,16 @@ test('origin and content type validation',async()=>{
  assert.equal((await call('/api/v1/auth/demo',{},null,'POST',{origin:'https://untrusted.example'})).status,403);
  assert.equal((await call('/api/v1/auth/demo',null,null,'POST')).status,415);
 });
+test('contact ownership, validation, verification and idempotent mock alerts',async()=>{
+ const a=await call('/api/v1/auth/demo',{}),b=await call('/api/v1/auth/demo',{});
+ const path='/api/v1/contacts';assert.equal((await call(path,{name:'Friend',phone:'123',relation:'Friend'},a.cookie)).status,422);
+ const c=await call(path,{name:'Ananya',phone:'+919876543210',relation:'Friend'},a.cookie);assert.equal(c.status,201);
+ assert.equal((await call(path,null,b.cookie)).body.length,0);
+ assert.equal((await call(path+'/'+c.body.id,undefined,b.cookie,'DELETE')).status,404);
+ const alert={request_id:'test-alert-request-001',type:'manual',location:null};assert.equal((await call('/api/v1/alerts/trigger',alert,a.cookie)).status,409);
+ await call(path+'/'+c.body.id,{verify_simulation:true},a.cookie,'PATCH');
+ const first=await call('/api/v1/alerts/trigger',alert,a.cookie),second=await call('/api/v1/alerts/trigger',alert,a.cookie);assert.equal(first.status,201);assert.equal(second.status,200);assert.equal(first.body.id,second.body.id);assert.equal(first.body.simulation,true);assert.equal(first.body.recipients[0].status,'simulated_delivered');
+ assert.equal((await call('/api/v1/alerts',null,a.cookie)).body.length,1);assert.equal((await call('/api/v1/alerts',null,b.cookie)).body.length,0);
+ assert.equal((await call('/api/v1/alerts/trigger',{...alert,request_id:'invalid-location',location:{latitude:95,longitude:0}},a.cookie)).status,422);
+ await call(path+'/'+c.body.id,{name:'Ananya',phone:'+919876543211',relation:'Friend'},a.cookie,'PUT');assert.equal((await call(path,null,a.cookie)).body[0].verified,0);
+});
