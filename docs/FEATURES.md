@@ -2,15 +2,15 @@
 
 Source review: all 13 pages of `../Documentation.pdf` extracted, with the TrackShield page also visually inspected.
 
-| Stage          | Status                                                   | Evidence / remaining work                                                                                                                           |
-| -------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Foundation     | Implemented; logic tested                                | Accounts, SQLite, sessions, health, responsive shell. Real HTTP/visual checks blocked by sandbox.                                                   |
-| Contacts / SOS | Implemented; logic tested                                | CRUD, international phone validation, ownership, verification simulation, idempotent mock delivery. Browser countdown checks supplied but not run.  |
-| RouteShield    | Implemented; algorithm tested                            | Shared Dijkstra, weighted costs, explicit unknown tags, fictional offline graph and live Overpass adapter. Live network retrieval untested here.    |
-| DeepCloak      | Simulation implemented; pixel logic tested               | Local processing, original/output preview and PNG download. No face model, PGD/EOT or efficacy measurements. Browser decoding/export untested here. |
-| TrackShield    | Simulation and experimental browser adapter implemented  | Bounded histories, trust list, persistence/movement rule and calibrated estimate. Real BLE support and phone calibration untested.                  |
-| Audio Trigger  | Experimental foreground path and simulations implemented | RAM-only worklet, on-device-only recognizer gate, cooldown, countdown integration. Hardware/audio events untested. Scream classifier simulated.     |
-| PWA / native   | PWA build verified; native scaffold provided             | Manifest/icons/versioned shell emitted. Real offline/install flow and SDK builds untested. Capacitor wraps a hosted HTTPS app.                      |
+| Stage          | Status                                                   | Evidence / remaining work                                                                                                                                                             |
+| -------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Foundation     | Implemented; logic tested                                | Accounts, SQLite, sessions, health, responsive shell. Real HTTP/visual checks blocked by sandbox.                                                                                     |
+| Contacts / SOS | Implemented; logic tested                                | CRUD, international phone validation, ownership, verification simulation, idempotent mock delivery. Browser countdown checks supplied but not run.                                    |
+| RouteShield    | Implemented; algorithm tested                            | Real OSM tile viewer with GPS/map-picked points; live Overpass graph, shared Dijkstra, weights and explicit unknown tags. Live network retrieval untested here.                       |
+| DeepCloak      | Simulation implemented; pixel logic tested               | Local processing, original/output preview and PNG download. No face model, PGD/EOT or efficacy measurements. Browser decoding/export untested here.                                   |
+| TrackShield    | Native and supported-browser scan adapters implemented   | Bounded histories, trust list, persistence/movement rule and calibrated estimate. Native BluetoothLe scan lifecycle tested using mocks; physical BLE and calibration untested.        |
+| Audio Trigger  | Experimental foreground path and simulations implemented | RAM-only worklet, on-device-only recognizer gate, cooldown, countdown integration. Hardware/audio events untested. Scream classifier simulated.                                       |
+| PWA / native   | PWA build verified; native scaffold provided             | Manifest/icons/versioned shell emitted. Real offline/install flow and SDK builds untested. Capacitor wraps a hosted HTTPS app; BluetoothLe plugin installation/rebuild is documented. |
 
 ## Scope decisions
 

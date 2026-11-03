@@ -19,6 +19,10 @@ try {
     page = await context.newPage(),
     errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  // Never automate downloads from OSM's community tile server.
+  await page.route("https://tile.openstreetmap.org/**", (route) =>
+    route.abort(),
+  );
   await page.goto(base);
   await page.getByRole("button", { name: "Try the demo" }).click();
   await page.getByRole("heading", { name: /Your day/ }).waitFor();
@@ -56,6 +60,7 @@ try {
     .click();
   await page.getByText("Demo Friend", { exact: true }).waitFor();
   await page.getByRole("button", { name: "RouteShield", exact: true }).click();
+  await page.getByRole("button", { name: "Offline demo", exact: true }).click();
   await page.getByRole("button", { name: /Safety-weighted/ }).waitFor();
   assert.ok((await page.locator("table tbody tr").count()) > 0);
   await page.getByRole("button", { name: "DeepCloak", exact: true }).click();
@@ -73,6 +78,9 @@ try {
     "resqx-simulated-photo.png",
   );
   await page.getByRole("button", { name: "TrackShield", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Optional sample", exact: true })
+    .click();
   for (let i = 0; i < 3; i++) {
     if (i === 1) await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Run sample scan" }).click();

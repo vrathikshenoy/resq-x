@@ -29,26 +29,26 @@ Dependencies already present on this machine were reused for the build because p
 
 ## Implemented features
 
-| Feature          | Working behavior                                                                                                                                       | Simulation / limit                                                                                                                         |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Foundation       | Responsive app shell, registration/login/logout, private demo sessions, persistent SQLite, PBKDF2 passwords, expiring HttpOnly cookie sessions         | No email verification or password recovery; single-server prototype                                                                        |
-| Trusted circle   | Add, edit, remove and validate up to 10 international-format contacts; changing a number resets verification                                           | Verification explicitly simulated; contact consent must be obtained separately                                                             |
-| SOS              | Ten-second cancellable dialog, optional location requested afterward, idempotent server requests, per-contact results, account-scoped alert history    | Mock delivery only. No actual SMS, calls, push notifications or emergency dispatch                                                         |
-| RouteShield      | Real Dijkstra shortest/weighted paths, map geometry, street-by-street factors, unknown-lighting handling, bounded live Overpass adapter                | Offline graph is fictional. Live OSM depends on network and incomplete tags; weights do not establish safety                               |
-| DeepCloak        | Local image validation, orientation-aware browser decoding, preview, bounded ±8 channel changes, metadata-free PNG export, measured PSNR               | Random perturbation simulation; no face detection/model, PGD/EOT, embeddings or measured model protection                                  |
-| TrackShield      | Opt-in real BLE advertisements where `requestLEScan` exists, per-session observations, signal history, local trust list, calibrated path-loss controls | Three-second demo scans always available. Repeated detection rule uses self-reported movement; no directional radar or stalking conclusion |
-| Audio Trigger    | Explicit microphone permission, AudioWorklet volume meter, 1.5-second RAM buffer, optional strictly on-device English speech recognition               | No trained KWS/scream model. Phrase/scream simulations are available without a mic. No remote speech fallback                              |
-| PWA              | Standalone manifest, maskable icons, versioned offline app shell, responsive safe-area navigation                                                      | Visit once online. Photos, route demos and BLE demos work offline; contacts and alerts require the server                                  |
-| Native packaging | Capacitor config and Android/iOS setup instructions                                                                                                    | Wrapper scaffolding only; no native binary, BLE plugin or background sensor implementation                                                 |
+| Feature          | Working behavior                                                                                                                                    | Simulation / limit                                                                                                                         |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Foundation       | Responsive app shell, registration/login/logout, private demo sessions, persistent SQLite, PBKDF2 passwords, expiring HttpOnly cookie sessions      | No email verification or password recovery; single-server prototype                                                                        |
+| Trusted circle   | Add, edit, remove and validate up to 10 international-format contacts; changing a number resets verification                                        | Verification explicitly simulated; contact consent must be obtained separately                                                             |
+| SOS              | Ten-second cancellable dialog, optional location requested afterward, idempotent server requests, per-contact results, account-scoped alert history | Mock delivery only. No actual SMS, calls, push notifications or emergency dispatch                                                         |
+| RouteShield      | Live OSM tiles, GPS/map-picked endpoints, Overpass street graphs, Dijkstra shortest/weighted paths, inspectable street tags and fetch timestamp     | Offline graph is fictional. Live OSM depends on network and incomplete tags; weights do not establish safety                               |
+| DeepCloak        | Local image validation, orientation-aware browser decoding, preview, bounded ±8 channel changes, metadata-free PNG export, measured PSNR            | Random perturbation simulation; no face detection/model, PGD/EOT, embeddings or measured model protection                                  |
+| TrackShield      | Native foreground BluetoothLe plugin adapter and supported-browser advertisement scans, signal history, local trust list and RSSI calibration       | Three-second demo scans always available. Repeated detection rule uses self-reported movement; no directional radar or stalking conclusion |
+| Audio Trigger    | Explicit microphone permission, AudioWorklet volume meter, 1.5-second RAM buffer, optional strictly on-device English speech recognition            | No trained KWS/scream model. Phrase/scream simulations are available without a mic. No remote speech fallback                              |
+| PWA              | Standalone manifest, maskable icons, versioned offline app shell, responsive safe-area navigation                                                   | Visit once online. Photos, route demos and BLE demos work offline; contacts and alerts require the server                                  |
+| Native packaging | Capacitor config and Android/iOS setup instructions                                                                                                 | Native BLE adapter requires installing the documented plugin and rebuilding; no native binary or background sensor implementation          |
 
 ## A five-minute walkthrough
 
 1. Choose **Try the demo** and open **Set up my safety circle**.
 2. Add a contact using an international number (for example `+15550102001`) and choose **Simulate verification**. No messages are sent.
 3. Choose **Practice an SOS**, cancel once, then try again and let the countdown complete. Inspect the test alert history. Location is optional and permission denial does not block the mock alert.
-4. Open **RouteShield** to compare sample paths. Select either option and inspect its scoring table. For live data, enter two coordinates within 3 km and choose **Live OSM data**. Failure is explicit; live mode never silently returns sample data.
+4. Open **RouteShield**. **Live OSM data** is the default online. Use **Use my location** or **Set start on map**, then **Set destination on map** (or enter coordinates). Choose **Compare walking routes** for locations within 3 km. Inspect shortest/weighted alternatives, lighting tags and the real-data timestamp. **Offline demo** is an explicit sample mode; live failure never returns fabricated data.
 5. Open **DeepCloak**, choose a file or sample illustration, confirm permission, and run the simulation. Compare and download the result. Metrics refer to pixel changes against the resized input, not face-model effectiveness.
-6. Open **TrackShield** and run a sample scan three times. Mark movement before the second and third scans. Inspect the repeated-detection notice and a device’s signal history, then mark it trusted.
+6. Open **TrackShield**. Real scanning is the default. A native build with the BluetoothLe plugin, or a browser exposing BLE advertisement scanning, requests permission when you press **Start foreground scan**. Unsupported browsers show the limitation and no devices. To rehearse without hardware, select **Optional sample** explicitly; repeat three scans with movement marked twice.
 7. Open **Audio Trigger** and rehearse a phrase/scream trigger. A real microphone is optional. Local phrase recognition only starts if the browser explicitly reports an installed on-device English recognizer.
 
 On mobile, Home shows all four tools. **More** opens Settings with direct links to every module and the trusted circle.
@@ -90,7 +90,7 @@ Tracking observations and trusted-device identifiers stay in the browser. The op
 
 Lighting is `1` for a lit tag, `0` for explicitly unlit, and `0.5` for unknown. Activity counts selected amenity/shop nodes within 75 m of the segment midpoint, capped at three. This is a starting heuristic, not a validated safety score. Nearby amenities may be closed. Pedestrian restrictions, `oneway:foot`, disconnected streets and missing tags are handled. Access and other real-world walking restrictions may still be incomplete in OSM.
 
-Live requests use a fixed Overpass endpoint, at most 3 km between endpoints, a bounded area, response/time/graph-size limits and a one-hour in-memory cache of up to ten public street graphs. Endpoint connectors are not turn-by-turn directions. The UI draws returned street geometry rather than requiring external map tiles; OSM attribution is displayed.
+Live requests use a fixed Overpass endpoint, at most 3 km between endpoints, a bounded area, response/time/graph-size limits and a one-hour in-memory cache of up to ten public street graphs. Endpoint connectors are not turn-by-turn directions. The live map loads real OpenStreetMap raster tiles and overlays returned route geometry in Web Mercator. It supports pan, zoom, GPS and selecting start/destination points. Tiles follow normal browser caching; there is no offline tile download or prefetch. Failed tiles are reported while route geometry remains visible. OSM attribution links to its copyright page.
 
 ## Privacy and deployment
 
@@ -112,7 +112,7 @@ The native target is a **Capacitor wrapper of the hosted HTTPS application**. Th
 On a development machine with network access and Android Studio (or Xcode on macOS):
 
 ```sh
-npm install @capacitor/core @capacitor/android @capacitor/ios
+npm install @capacitor/core @capacitor/android @capacitor/ios @capacitor-community/bluetooth-le
 npm install -D @capacitor/cli
 export RESQX_NATIVE_URL=https://your-deployed-resqx.example
 npm run build
@@ -123,7 +123,16 @@ npm run native:android
 # On macOS: npm run native:ios
 ```
 
-Build/sign using the platform SDK. Use the simulation controls in WebViews where BLE or speech APIs are absent. Real background BLE, location, keyword spotting, local haptics and reliable locked-screen operation require native plugins, operating-system permissions and physical-device testing. Capacitor packaging and device binaries could not be built in this environment.
+Before running on **iOS**, add this required Bluetooth permission to `ios/App/App/Info.plist` inside `<dict>`:
+
+```xml
+<key>NSBluetoothAlwaysUsageDescription</key>
+<string>RESQ-X scans nearby Bluetooth devices only when you enable TrackShield.</string>
+```
+
+The native scan adapter uses the Capacitor-injected BluetoothLe plugin interface: permission initialization, Bluetooth-enabled check, repeated advertisements with RSSI, listener removal and stop on cancellation/page hiding. Android uses the plugin's standard Bluetooth/location permissions; do not assert `neverForLocation` because TrackShield estimates proximity. Match the BLE plugin major version to the Capacitor major version, as documented by the [plugin maintainers](https://github.com/capacitor-community/bluetooth-le).
+
+Build/sign using the platform SDK and test on a physical phone. Simply installing the PWA does not add native Bluetooth support. Native scanning is foreground-only. Use the separate sample mode when hardware support is absent. Real background BLE, location, keyword spotting, local haptics and reliable locked-screen operation require native plugins, operating-system permissions and physical-device testing. Capacitor packaging and device binaries could not be built in this environment.
 
 ## Validation
 
@@ -135,10 +144,22 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-**Verified here:** eleven test groups pass, covering authentication, origin/content-type/object validation, account isolation, contact edits/verification/duplicates, alert idempotency and location input, route scoring/disconnection/access, photo perturbation bounds and file signatures, tracking persistence/trust/bounded history, audio buffer/phrase matching, and actual backend entry-point initialization, occupied-port error handling and dynamic development proxy wiring and preserved browser-host origin validation (with socket binding stubbed). TypeScript checking and the Vite production build pass. PWA build emits a versioned offline cache.
+**Verified here:** fifteen test groups pass, covering authentication, origin/content-type/object validation, account isolation, contact edits/verification/duplicates, alert idempotency and location input, route scoring/disconnection/access, photo perturbation bounds and file signatures, tracking persistence/trust/bounded history, audio buffer/phrase matching, and actual backend entry-point initialization, occupied-port error handling and dynamic development proxy wiring and preserved browser-host origin validation, live-OSM response normalization/cache/failure behavior, map projection, and native/browser BLE lifecycle (with external responses, hardware and socket binding stubbed). TypeScript checking and the Vite production build pass. PWA build emits a versioned offline cache.
 
 **Not verified here:** real HTTP/browser end-to-end operation, visual layout, service-worker offline reload, microphone/BLE/GPS hardware, live Overpass requests, clean dependency installation and Android/iOS builds. The execution sandbox rejects local listening sockets and Chromium launch. The connected-browser check also timed out. `tests/browser.mjs` supplies a repeatable end-to-end flow including contacts, countdown cancel/confirmation, image download, route/tracker/audio demos, mobile overflow and offline routing; it was not successfully run here.
 
 ## Staged history
 
 `git log --oneline` shows separate commits for the plan, foundation, contacts/SOS, routing, photos, tracking, audio and integration. See [the implementation plan](docs/IMPLEMENTATION.md) and [feature checklist](docs/FEATURES.md) for scope and status.
+
+## Live data and hardware checks
+
+```sh
+npm run test:live
+# Or supply your actual origin and destination coordinates:
+npm run test:live -- 12.975 77.59 12.9705 77.5948
+```
+
+This command calls the real Overpass provider, never mocks or substitutes sample data, and prints provider timestamp, graph size, route distances and lighting coverage. It **failed in this execution environment** because the provider could not be reached; a successful live provider check is not claimed. The separate automated API test uses a clearly constructed OSM-shaped fixture to verify parsing, tags, scoring, access exclusions, caching and errors. Browser tests block community tile downloads and explicitly select sample modes; they are not live-provider or BLE-hardware tests.
+
+The tile viewer follows the [OSM tile usage policy](https://operations.osmfoundation.org/policies/tiles/): visible attribution, correct HTTPS tile URL, browser Referer, normal HTTP caching and viewport-only requests. No Nominatim geocoder is used. Before a larger deployment, choose a tile provider appropriate for its traffic.

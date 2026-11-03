@@ -12,7 +12,7 @@
     "dev:api": "node --watch backend/server.mjs",
     "build": "tsc --noEmit && vite build && node scripts/build-sw.mjs",
     "start": "node --env-file-if-exists=.env backend/server.mjs",
-    "test": "node tests/api.test.mjs && node tests/startup.test.mjs",
+    "test": "node tests/api.test.mjs && node tests/startup.test.mjs && node tests/ble.test.mjs",
     "test:e2e": "node tests/browser.mjs",
     "native:sync": "npm run build && npx --no-install cap sync",
     "native:android": "npx --no-install cap open android",

@@ -1,4 +1,4 @@
-// shortcut: hosted PWA wrapper only; add native plugins and device tests for background sensors.
+// shortcut: foreground BLE uses the installed BluetoothLe plugin; background sensors still require native work.
 const url = process.env.RESQX_NATIVE_URL;
 if (!url || !/^https:\/\//.test(url))
   throw new Error(

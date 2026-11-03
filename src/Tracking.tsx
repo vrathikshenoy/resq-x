@@ -15,17 +15,15 @@ import {
   approximateDistance,
   type Device,
 } from "./lib/tracking.mjs";
-type BLEDevice = EventTarget & { id: string; name?: string };
-type BLEScan = { stop: () => void; active: boolean };
-type BluetoothAPI = EventTarget & {
-  requestLEScan?: (options: {
-    acceptAllAdvertisements: boolean;
-    keepRepeatedDevices: boolean;
-  }) => Promise<BLEScan>;
-};
+import {
+  startRealScan,
+  trackingSupport,
+  type CapacitorBLE,
+  type BrowserBLE,
+} from "./lib/ble.mjs";
 export function Tracking({ userId }: { userId: string }) {
   const key = "resqx-tracking-" + userId;
-  const [mode, setMode] = useState("demo"),
+  const [mode, setMode] = useState("live"),
     [devices, setDevices] = useState<Device[]>([]),
     [trusted, setTrusted] = useState<string[]>(() => {
       try {
@@ -47,11 +45,15 @@ export function Tracking({ userId }: { userId: string }) {
   const cleanup = useRef<(() => void) | null>(null),
     active = useRef(true),
     run = useRef(0),
-    demoCount = useRef(0);
-  const bluetooth = (navigator as Navigator & { bluetooth?: BluetoothAPI })
+    demoCount = useRef(0),
+    scanController = useRef<AbortController | null>(null);
+  const bluetooth = (navigator as Navigator & { bluetooth?: BrowserBLE })
     .bluetooth;
+  const capacitor = (window as Window & { Capacitor?: CapacitorBLE }).Capacitor;
+  const support = trackingSupport(capacitor, bluetooth, window.isSecureContext);
   function stop() {
     run.current++;
+    scanController.current?.abort();
     cleanup.current?.();
     cleanup.current = null;
     setScanning(false);
@@ -66,6 +68,7 @@ export function Tracking({ userId }: { userId: string }) {
     return () => {
       active.current = false;
       run.current++;
+      scanController.current?.abort();
       cleanup.current?.();
       clearInterval(id);
       document.removeEventListener("visibilitychange", hide);
@@ -121,49 +124,65 @@ export function Tracking({ userId }: { userId: string }) {
       };
       return;
     }
-    if (!bluetooth?.requestLEScan) {
-      setError(
-        "Passive BLE advertisement scanning is unavailable in this browser. Use the labeled demo. A device picker cannot scan all nearby trackers.",
-      );
-      setScanning(false);
-      return;
-    }
+    const controller = new AbortController();
+    scanController.current = controller;
     try {
-      const scan = await bluetooth.requestLEScan({
-        acceptAllAdvertisements: true,
-        keepRepeatedDevices: true,
+      const scanner = await startRealScan({
+        capacitor,
+        bluetooth,
+        secure: window.isSecureContext,
+        signal: controller.signal,
+        onObservation: observe,
       });
       if (current !== run.current || !active.current) {
-        scan.stop();
+        await scanner.stop();
         return;
       }
-      const listener = (event: Event) => {
-        const e = event as Event & { device: BLEDevice; rssi?: number };
-        if (Number.isFinite(e.rssi))
-          observe(e.device.id, e.device.name || "Unnamed BLE device", e.rssi!);
-      };
-      bluetooth.addEventListener("advertisementreceived", listener);
       const timeout = setTimeout(stop, 15000);
       cleanup.current = () => {
         clearTimeout(timeout);
-        scan.stop();
-        bluetooth.removeEventListener("advertisementreceived", listener);
+        void scanner.stop().catch(() => {
+          if (active.current)
+            setError(
+              "The Bluetooth scan could not be stopped. Close the app or disable Bluetooth in system settings.",
+            );
+        });
       };
     } catch (e) {
+      if (current !== run.current || !active.current) return;
       setError(
         (e as Error).name === "NotAllowedError"
-          ? "Bluetooth permission was denied. You can still use the demo."
-          : "Bluetooth scan could not start. Check permissions and device support.",
+          ? "Bluetooth permission was denied. No sample devices have been substituted."
+          : (e as Error).message,
       );
       setScanning(false);
     }
   }
+
   const device = devices.find((d) => d.id === selected),
     warnings = devices.filter(
       (d) => summarizeDevice(d.observations, trusted.includes(d.id)).persistent,
     );
   return (
     <div className="stack">
+      {mode === "live" && (
+        <div
+          className={
+            "notice " + (support.kind === "unsupported" ? "warning" : "")
+          }
+          role="status"
+        >
+          <strong>
+            {support.kind === "native"
+              ? "Native BLE scan"
+              : support.kind === "web"
+                ? "Browser BLE scan"
+                : "Real scanning unavailable here"}
+          </strong>
+          <br />
+          {support.message}
+        </div>
+      )}
       <div className="notice warning">
         <strong>
           {mode === "demo"
@@ -217,7 +236,7 @@ export function Tracking({ userId }: { userId: string }) {
                   setSelected(null);
                 }}
               >
-                Simulation
+                Optional sample
               </button>
               <button
                 disabled={scanning}
@@ -247,6 +266,9 @@ export function Tracking({ userId }: { userId: string }) {
             <button
               className={"button full " + (scanning ? "secondary" : "primary")}
               onClick={scanning ? stop : start}
+              disabled={
+                !scanning && mode === "live" && support.kind === "unsupported"
+              }
             >
               {scanning ? (
                 <>
