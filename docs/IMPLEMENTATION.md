@@ -4,7 +4,7 @@ Source: ../Documentation.pdf, all 13 pages. Platform decision: mobile-first inst
 
 ## Stack and scope
 
-React, TypeScript and Vite; plain CSS and Lucide icons. FastAPI, standard-library SQLite, cookie sessions and PBKDF2 passwords. SQLite replaces PostgreSQL for a fast, single-server prototype. No paid services or model downloads are required. No existing callers, fixtures or exports exist.
+React, TypeScript and Vite; plain CSS and Lucide icons. Node 22 built-in HTTP, SQLite, cookie sessions and PBKDF2 passwords. FastAPI packages cannot be downloaded in this environment; a zero-dependency Node backend keeps the app runnable. SQLite replaces PostgreSQL for a fast, single-server prototype. No paid services or model downloads are required. No existing callers, fixtures or exports exist.
 
 Design: pale cool background #f3f6f7, ink #172e35, teal #11796e, mint #e2f3ed, emergency coral #dd514b, white #ffffff. System sans-serif for offline reliability. Desktop left navigation and two-column workspace become mobile bottom navigation and stacked content. A prominent safety check-in and explicit module activity are central, without implying protection is guaranteed.
 

@@ -1,0 +1,11 @@
+import { DatabaseSync } from 'node:sqlite';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+const file = process.env.DATABASE_PATH || 'data/resq-x.sqlite';
+if(file!==':memory:') mkdirSync(dirname(file), {recursive:true, mode:0o700});
+export const db = new DatabaseSync(file);
+db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
+CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE, hash TEXT, salt TEXT, created TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), expires INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS contacts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), name TEXT NOT NULL, phone TEXT NOT NULL, relation TEXT NOT NULL, verified INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id,phone));
+CREATE TABLE IF NOT EXISTS alerts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), request_id TEXT NOT NULL, type TEXT NOT NULL, created TEXT NOT NULL, latitude REAL, longitude REAL, status TEXT NOT NULL, recipients TEXT NOT NULL, UNIQUE(user_id,request_id));`);
