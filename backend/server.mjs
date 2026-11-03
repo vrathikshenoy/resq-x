@@ -231,7 +231,16 @@ if (
   import.meta.url === pathToFileURL(resolve(process.argv[1])).href
 ) {
   const { features } = await import("./features.mjs");
-  createApp(features).listen(
+  const server = createApp(features);
+  server.once("error", (error) => {
+    console.error(
+      error.code === "EADDRINUSE"
+        ? `RESQ-X could not start: port ${process.env.PORT || 3001} is already in use. Stop the other server or set PORT to a free port. For development, npm run dev selects a free API port automatically.`
+        : `RESQ-X could not start: ${error.message}`,
+    );
+    process.exitCode = 1;
+  });
+  server.listen(
     Number(process.env.PORT || 3001),
     process.env.HOST || "127.0.0.1",
     () =>

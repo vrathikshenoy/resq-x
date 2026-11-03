@@ -1,9 +1,10 @@
 import { defineConfig } from "vite";
+const apiTarget = process.env.RESQX_API_TARGET || "http://127.0.0.1:3001";
 export default defineConfig({
   server: {
     proxy: {
-      "/api": "http://127.0.0.1:3001",
-      "/health": "http://127.0.0.1:3001",
+      "/api": apiTarget,
+      "/health": apiTarget,
     },
   },
   build: { target: "es2022" },
