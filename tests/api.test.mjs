@@ -56,3 +56,11 @@ test('photo simulation enforces per-channel bounds, preserves alpha and validate
  assert.throws(()=>validateImageHeader(new Uint8Array(12),'image/png',11*1024*1024),/10 MB/);
  validateImageHeader(new Uint8Array([137,80,78,71,13,10,26,10]),'image/png',100);
 });
+test('tracking requires separate sessions and movement; trusted devices suppress warnings',async()=>{
+ const {appendObservation,summarizeDevice,approximateDistance}=await import('../src/lib/tracking.mjs');let devices=[];
+ for(let i=0;i<3;i++)devices=appendObservation(devices,{id:'tag',name:'Sample tag',rssi:-60+i,time:i,session:'session-'+i,moved:i>0});
+ assert.equal(summarizeDevice(devices[0].observations).persistent,true);assert.equal(summarizeDevice(devices[0].observations,true).persistent,false);
+ assert.equal(summarizeDevice(devices[0].observations.map(o=>({...o,session:'one'}))).persistent,false);assert.equal(summarizeDevice(devices[0].observations.map(o=>({...o,moved:false}))).persistent,false);
+ assert.equal(approximateDistance(-59,-59,2),1);assert.throws(()=>approximateDistance(-59,-59,0),/calibration/);
+ for(let i=0;i<40;i++)devices=appendObservation(devices,{id:'tag',name:'Sample tag',rssi:-60,time:i,session:'extra',moved:false});assert.equal(devices[0].observations.length,30);
+});
