@@ -1,33 +1,775 @@
-import { useState,useEffect } from 'react';
-import { ShieldCheck,LayoutDashboard,Route,Radar,ImagePlus,AudioLines,Users,ArrowUpRight,ArrowRight,Settings,LogOut,LockKeyhole,Check, Bell, LifeBuoy, Download, Menu } from 'lucide-react';
-import { api,type User } from './api';
-import {Contacts,type Contact} from './Contacts';
-import {SOS,type Trigger} from './SOS';
-import {Routes} from './Routes';
-import {Photos} from './Photos';
-import {Tracking} from './Tracking';
-import {Audio} from './Audio';
-export const modules=[{id:'routes',name:'RouteShield',text:'A little more insight. A better way home.',icon:Route,color:'teal',tag:'Map-aware routing'},{id:'tracking',name:'TrackShield',text:'Understand what’s staying close to you.',icon:Radar,color:'blue',tag:'Nearby device awareness'},{id:'photos',name:'DeepCloak',text:'Think privacy before you share a photo.',icon:ImagePlus,color:'purple',tag:'Photo privacy lab'},{id:'audio',name:'Audio Trigger',text:'A helping hand, without lifting a finger.',icon:AudioLines,color:'orange',tag:'Hands-free SOS'}];
-export function App(){
- const [contacts,setContacts]=useState<Contact[]>([]),[sos,setSos]=useState<Trigger|null>(null);
- const refreshContacts=async()=>{setContacts(await api<Contact[]>('/contacts'))};
- const startSOS=(type:Trigger='manual')=>{if(!contacts.some(c=>c.verified)){setNotice('Add a contact and simulate verification before trying SOS.');setPage('contacts');return}setSos(type)};
- const [user,setUser]=useState<User|null>(null),[loading,setLoading]=useState(true),[page,setPage]=useState('home'),[notice,setNotice]=useState(''),[online,setOnline]=useState(navigator.onLine);
- useEffect(()=>{api<User>('/auth/me').then(setUser).catch(()=>{}).finally(()=>setLoading(false));const update=()=>setOnline(navigator.onLine);window.addEventListener('online',update);window.addEventListener('offline',update);return()=>{window.removeEventListener('online',update);window.removeEventListener('offline',update)}},[]);
- useEffect(()=>{if(user)refreshContacts().catch(e=>setNotice(e.message))},[user]);
- useEffect(()=>{if(notice){const id=setTimeout(()=>setNotice(''),6000);return()=>clearTimeout(id)}},[notice]);
- if(loading)return <div className="loading"><ShieldCheck size={42}/><p>Opening your safety space…</p></div>;
- if(!user)return <Auth onUser={setUser}/>;
- const navigate=(id:string)=>{setPage(id);window.scrollTo(0,0)};
- return <div className="app"><aside className="sidebar"><Brand/><div className="nav-label">Your safety space</div><nav aria-label="Main navigation">{[{id:'home',name:'Overview',icon:LayoutDashboard},...modules,{id:'contacts',name:'Trusted circle',icon:Users}].map(item=><button key={item.id} onClick={()=>navigate(item.id)} className={page===item.id?'nav-item active':'nav-item'}><item.icon size={20}/><span>{item.name}</span>{page===item.id&&<i/>}</button>)}</nav><div className="sidebar-bottom"><div className="privacy-note"><LockKeyhole size={19}/><strong>Built around your privacy</strong><p>You choose what to enable.<br/>You stay in control.</p></div><button className="nav-item" onClick={()=>navigate('settings')}><Settings size={19}/>Settings & permissions</button><button className="profile" onClick={()=>navigate('settings')}><span className="avatar">{user.name[0].toUpperCase()}</span><span><strong>{user.name}</strong><small>{user.email?'Personal account':'Demo account'}</small></span><Settings size={17}/></button></div></aside>
- <div className="workspace"><header className="topbar"><span className="breadcrumb">Your personal safety companion</span><span className="mobile-brand"><Brand/></span><div className="header-actions"><span className={'status '+(!online?'offline':'')}><i/>{online?'You’re connected':'Offline'}</span><button className="icon-button" aria-label="Open alert history" onClick={()=>navigate('contacts')}><Bell size={20}/></button><span className="avatar small">{user.name[0].toUpperCase()}</span></div></header>
- <main>{!online&&<div className="notice warning">You’re offline. Local demos work; contacts, routes and alerts need a connection to your server.</div>}{page==='home'?<><div className="page-heading"><div><p className="eyebrow">A little awareness goes a long way</p><h1>Your day. Your way. <span>With a little backup.</span></h1><p>Four thoughtful tools for your everyday peace of mind.</p></div><span className="date-label">{new Intl.DateTimeFormat('en',{weekday:'long',month:'short',day:'numeric'}).format(new Date())}</span></div>
- <div className="home-grid"><div className="home-main"><section className="checkin"><div className="checkin-copy"><span className="pill light"><ShieldCheck size={14}/>Your safety, in your hands</span><h2>Stay aware.<br/>Move with confidence.</h2><p>Set up your trusted circle and explore tools<br className="desktop-only"/> that look out for the little things.</p><button className="button white" onClick={()=>navigate('contacts')}>Set up my safety circle <ArrowRight size={17}/></button></div><div className="shield-art" aria-hidden="true"><div className="orbit one"/><div className="orbit two"/><div className="orbit three"/><div className="shield-symbol"><ShieldCheck size={88} strokeWidth={1.25}/></div><span className="orbit-dot d1"/><span className="orbit-dot d2"/><span className="orbit-dot d3"/></div></section>
- <div className="section-title"><h2>Your everyday toolkit</h2><span>Small steps. More awareness.</span></div><div className="module-grid">{modules.map(m=><button key={m.id} className={'module-card '+m.color} onClick={()=>navigate(m.id)}><div className="module-top"><span className="module-icon"><m.icon size={25}/></span><ArrowUpRight size={19}/></div><h3>{m.name}</h3><p>{m.text}</p><span className="module-footer"><i/>{m.tag}<ArrowRight size={16}/></span></button>)}</div>
- <section className="daily-note"><span className="note-icon"><LifeBuoy size={23}/></span><div><strong>Your instincts matter, too.</strong><p>These tools offer information, not guarantees. If something feels wrong, find a public place and reach out to someone you trust.</p></div></section></div><aside className="home-right"><section className="card sos-card"><div className="section-title"><h2>A way to reach out</h2><span className="pill coral">Demo mode</span></div><p>Practice sending an SOS to your trusted circle. You’ll have 10 seconds to cancel.</p><button className="sos-orb" onClick={()=>startSOS()}><LifeBuoy size={30}/><strong>SOS</strong><span>Start a test alert</span></button><p className="fine-print">Simulation only. No real messages<br/>or emergency services are contacted.</p></section><section className="card circle-summary"><div className="section-title"><h2>Your trusted circle</h2><Users size={19}/></div><div className="circle-avatars">{contacts.slice(0,3).map(c=><span key={c.id} title={c.name}>{c.name[0].toUpperCase()}</span>)}{Array.from({length:Math.max(0,3-contacts.length)},(_,i)=><span key={i}>+</span>)}</div><h3>{contacts.length?`${contacts.length} people in your corner.`:"Your people, one tap away."}</h3><p>{contacts.length?`${contacts.filter(c=>c.verified).length} verified in simulation. Ready for a rehearsal.`:"Add someone you trust before trying an alert."}</p><button className="text-button" onClick={()=>navigate('contacts')}>Manage trusted contacts <ArrowRight size={16}/></button></section><div className="device-note"><LockKeyhole size={16}/><p>Your microphone and Bluetooth stay off until you choose to turn them on.</p></div></aside></div></>:page==='audio'?<><PageTitle title="Help starts with a few words." subtitle="Explore foreground listening and practice a hands-free alert."/><Audio ready={contacts.some(c=>!!c.verified)} onTrigger={startSOS}/></>:page==='tracking'?<><PageTitle title="Notice what stays nearby." subtitle="Look for patterns in Bluetooth observations, without jumping to conclusions."/><Tracking userId={user.id}/></>:page==='photos'?<><PageTitle title="A privacy check before you share." subtitle="Explore the DeepCloak photo workflow, entirely on your device."/><Photos/></>:page==='routes'?<><PageTitle title="A more considered way home." subtitle="Compare walking routes with a little more context about the streets."/><Routes/></>:page==='contacts'?<><PageTitle title="Your trusted circle" subtitle="Keep your people close. Practice reaching out before you need to."/><Contacts contacts={contacts} refresh={refreshContacts} onSOS={()=>startSOS()}/></>:page==='settings'?<><PageTitle title="Your space, your settings" subtitle="A clear view of permissions, data, and what this prototype can do."/><section className="card settings"><h2>Privacy by choice</h2><p>Microphone, Bluetooth and location are requested only when you activate a feature. Photos are processed locally and never uploaded. Raw audio is never saved or sent.</p><h3>Prototype boundaries</h3><p>All SMS delivery and contact verification are simulations. Bluetooth and voice support depend on your browser. Background or locked-screen monitoring is unavailable. DeepCloak does not include a face model.</p><h3>Account</h3><p>{user.email||'This demo account is private to your session. Create an account after signing out for password-based access.'}</p><button className="button secondary" onClick={async()=>{try{await api('/auth/logout',{});setUser(null);setContacts([]);setPage('home')}catch(e){setNotice((e as Error).message)}}}><LogOut size={17}/>Sign out</button></section></>:<><PageTitle title={modules.find(m=>m.id===page)?.name||'Your trusted circle'} subtitle="We’re connecting this feature to the prototype."/><section className="card"><p>This module is being implemented in the next stage.</p></section></>}
- <footer><span><ShieldCheck size={14}/> RESQ-X</span><p>A safety-support prototype. Always trust your judgment.</p><button onClick={()=>navigate('settings')}>Privacy & limitations <ArrowUpRight size={13}/></button></footer></main></div>
- <nav className="bottom-nav" aria-label="Mobile navigation">{[{id:'home',name:'Home',icon:LayoutDashboard},{id:'routes',name:'Routes',icon:Route},{id:'tracking',name:'Tracking',icon:Radar},{id:'audio',name:'Audio',icon:AudioLines},{id:'more',name:'More',icon:Menu}].map(n=><button key={n.id} className={page===n.id?'selected':''} onClick={()=>navigate(n.id==='more'?'settings':n.id)}><n.icon size={21}/><span>{n.name}</span></button>)}</nav>{sos&&<SOS type={sos} onClose={()=>{setSos(null);setPage('contacts')}}/>}{notice&&<div role="status" className="toast">{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice('')}>×</button></div>}</div>;
+import { useState, useEffect } from "react";
+import {
+  ShieldCheck,
+  LayoutDashboard,
+  Route,
+  Radar,
+  ImagePlus,
+  AudioLines,
+  Users,
+  ArrowUpRight,
+  ArrowRight,
+  Settings,
+  LogOut,
+  LockKeyhole,
+  Bell,
+  LifeBuoy,
+  Download,
+  Menu,
+} from "lucide-react";
+import { api, type User } from "./api";
+import { Contacts, type Contact } from "./Contacts";
+import { SOS, type Trigger } from "./SOS";
+import { Routes } from "./Routes";
+import { Photos } from "./Photos";
+import { Tracking } from "./Tracking";
+import { Audio } from "./Audio";
+export const modules = [
+  {
+    id: "routes",
+    name: "RouteShield",
+    text: "A little more insight. A better way home.",
+    icon: Route,
+    color: "teal",
+    tag: "Map-aware routing",
+  },
+  {
+    id: "tracking",
+    name: "TrackShield",
+    text: "Understand what’s staying close to you.",
+    icon: Radar,
+    color: "blue",
+    tag: "Nearby device awareness",
+  },
+  {
+    id: "photos",
+    name: "DeepCloak",
+    text: "Think privacy before you share a photo.",
+    icon: ImagePlus,
+    color: "purple",
+    tag: "Photo privacy lab",
+  },
+  {
+    id: "audio",
+    name: "Audio Trigger",
+    text: "A helping hand, without lifting a finger.",
+    icon: AudioLines,
+    color: "orange",
+    tag: "Hands-free SOS",
+  },
+];
+export function App() {
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+  useEffect(() => {
+    const capture = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", capture);
+    return () => window.removeEventListener("beforeinstallprompt", capture);
+  }, []);
+  const [contacts, setContacts] = useState<Contact[]>([]),
+    [sos, setSos] = useState<Trigger | null>(null),
+    [alertsRevision, setAlertsRevision] = useState(0);
+  const refreshContacts = async () => {
+    setContacts(await api<Contact[]>("/contacts"));
+  };
+  const startSOS = (type: Trigger = "manual") => {
+    if (!contacts.some((c) => c.verified)) {
+      setNotice("Add a contact and simulate verification before trying SOS.");
+      setPage("contacts");
+      return;
+    }
+    setSos(type);
+  };
+  const [user, setUser] = useState<User | null>(null),
+    [loading, setLoading] = useState(true),
+    [page, setPage] = useState("home"),
+    [notice, setNotice] = useState(""),
+    [online, setOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    api<User>("/auth/me")
+      .then(setUser)
+      .catch(() => {
+        if (!navigator.onLine)
+          setUser({ id: "offline", name: "Offline explorer", email: null });
+      })
+      .finally(() => setLoading(false));
+    const update = () => setOnline(navigator.onLine);
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+  useEffect(() => {
+    if (user && navigator.onLine)
+      refreshContacts().catch((e) => setNotice(e.message));
+  }, [user]);
+  useEffect(() => {
+    if (notice) {
+      const id = setTimeout(() => setNotice(""), 6000);
+      return () => clearTimeout(id);
+    }
+  }, [notice]);
+  if (loading)
+    return (
+      <div className="loading">
+        <ShieldCheck size={42} />
+        <p>Opening your safety space…</p>
+      </div>
+    );
+  if (!user) return <Auth onUser={setUser} />;
+  const navigate = (id: string) => {
+    setPage(id);
+    window.scrollTo(0, 0);
+  };
+  return (
+    <div className="app">
+      <aside className="sidebar">
+        <Brand />
+        <div className="nav-label">Your safety space</div>
+        <nav aria-label="Main navigation">
+          {[
+            { id: "home", name: "Overview", icon: LayoutDashboard },
+            ...modules,
+            { id: "contacts", name: "Trusted circle", icon: Users },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => navigate(item.id)}
+              className={page === item.id ? "nav-item active" : "nav-item"}
+            >
+              <item.icon size={20} />
+              <span>{item.name}</span>
+              {page === item.id && <i />}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          <div className="privacy-note">
+            <LockKeyhole size={19} />
+            <strong>Built around your privacy</strong>
+            <p>
+              You choose what to enable.
+              <br />
+              You stay in control.
+            </p>
+          </div>
+          <button className="nav-item" onClick={() => navigate("settings")}>
+            <Settings size={19} />
+            Settings & permissions
+          </button>
+          <button className="profile" onClick={() => navigate("settings")}>
+            <span className="avatar">{user.name[0].toUpperCase()}</span>
+            <span>
+              <strong>{user.name}</strong>
+              <small>{user.email ? "Personal account" : "Demo account"}</small>
+            </span>
+            <Settings size={17} />
+          </button>
+        </div>
+      </aside>
+      <div className="workspace">
+        <header className="topbar">
+          <span className="breadcrumb">Your personal safety companion</span>
+          <span className="mobile-brand">
+            <Brand />
+          </span>
+          <div className="header-actions">
+            <span className={"status " + (!online ? "offline" : "")}>
+              <i />
+              {online ? "You’re connected" : "Offline"}
+            </span>
+            <button
+              className="icon-button"
+              aria-label="Open alert history"
+              onClick={() => navigate("contacts")}
+            >
+              <Bell size={20} />
+            </button>
+            <span className="avatar small">{user.name[0].toUpperCase()}</span>
+          </div>
+        </header>
+        <main>
+          {!online && (
+            <div className="notice warning">
+              You’re offline. Local demos work; contacts, live routes and alerts
+              need a connection to your server.
+            </div>
+          )}
+          {page === "home" ? (
+            <>
+              <div className="page-heading">
+                <div>
+                  <p className="eyebrow">A little awareness goes a long way</p>
+                  <h1>
+                    Your day. Your way. <span>With a little backup.</span>
+                  </h1>
+                  <p>Four thoughtful tools for your everyday peace of mind.</p>
+                </div>
+                <span className="date-label">
+                  {new Intl.DateTimeFormat("en", {
+                    weekday: "long",
+                    month: "short",
+                    day: "numeric",
+                  }).format(new Date())}
+                </span>
+              </div>
+              <div className="home-grid">
+                <div className="home-main">
+                  <section className="checkin">
+                    <div className="checkin-copy">
+                      <span className="pill light">
+                        <ShieldCheck size={14} />
+                        Your safety, in your hands
+                      </span>
+                      <h2>
+                        Stay aware.
+                        <br />
+                        Move with confidence.
+                      </h2>
+                      <p>
+                        Set up your trusted circle and explore tools
+                        <br className="desktop-only" /> that look out for the
+                        little things.
+                      </p>
+                      <button
+                        className="button white"
+                        onClick={() => navigate("contacts")}
+                      >
+                        Set up my safety circle <ArrowRight size={17} />
+                      </button>
+                    </div>
+                    <div className="shield-art" aria-hidden="true">
+                      <div className="orbit one" />
+                      <div className="orbit two" />
+                      <div className="orbit three" />
+                      <div className="shield-symbol">
+                        <ShieldCheck size={88} strokeWidth={1.25} />
+                      </div>
+                      <span className="orbit-dot d1" />
+                      <span className="orbit-dot d2" />
+                      <span className="orbit-dot d3" />
+                    </div>
+                  </section>
+                  <div className="section-title">
+                    <h2>Your everyday toolkit</h2>
+                    <span>Small steps. More awareness.</span>
+                  </div>
+                  <div className="module-grid">
+                    {modules.map((m) => (
+                      <button
+                        key={m.id}
+                        className={"module-card " + m.color}
+                        onClick={() => navigate(m.id)}
+                      >
+                        <div className="module-top">
+                          <span className="module-icon">
+                            <m.icon size={25} />
+                          </span>
+                          <ArrowUpRight size={19} />
+                        </div>
+                        <h3>{m.name}</h3>
+                        <p>{m.text}</p>
+                        <span className="module-footer">
+                          <i />
+                          {m.tag}
+                          <ArrowRight size={16} />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <section className="daily-note">
+                    <span className="note-icon">
+                      <LifeBuoy size={23} />
+                    </span>
+                    <div>
+                      <strong>Your instincts matter, too.</strong>
+                      <p>
+                        These tools offer information, not guarantees. If
+                        something feels wrong, find a public place and reach out
+                        to someone you trust.
+                      </p>
+                    </div>
+                  </section>
+                </div>
+                <aside className="home-right">
+                  <section className="card sos-card">
+                    <div className="section-title">
+                      <h2>A way to reach out</h2>
+                      <span className="pill coral">Demo mode</span>
+                    </div>
+                    <p>
+                      Practice sending an SOS to your trusted circle. You’ll
+                      have 10 seconds to cancel.
+                    </p>
+                    <button className="sos-orb" onClick={() => startSOS()}>
+                      <LifeBuoy size={30} />
+                      <strong>SOS</strong>
+                      <span>Start a test alert</span>
+                    </button>
+                    <p className="fine-print">
+                      Simulation only. No real messages
+                      <br />
+                      or emergency services are contacted.
+                    </p>
+                  </section>
+                  <section className="card circle-summary">
+                    <div className="section-title">
+                      <h2>Your trusted circle</h2>
+                      <Users size={19} />
+                    </div>
+                    <div className="circle-avatars">
+                      {contacts.slice(0, 3).map((c) => (
+                        <span key={c.id} title={c.name}>
+                          {c.name[0].toUpperCase()}
+                        </span>
+                      ))}
+                      {Array.from(
+                        { length: Math.max(0, 3 - contacts.length) },
+                        (_, i) => (
+                          <span key={i}>+</span>
+                        ),
+                      )}
+                    </div>
+                    <h3>
+                      {contacts.length
+                        ? `${contacts.length} people in your corner.`
+                        : "Your people, one tap away."}
+                    </h3>
+                    <p>
+                      {contacts.length
+                        ? `${contacts.filter((c) => c.verified).length} verified in simulation. Ready for a rehearsal.`
+                        : "Add someone you trust before trying an alert."}
+                    </p>
+                    <button
+                      className="text-button"
+                      onClick={() => navigate("contacts")}
+                    >
+                      Manage trusted contacts <ArrowRight size={16} />
+                    </button>
+                  </section>
+                  <div className="device-note">
+                    <LockKeyhole size={16} />
+                    <p>
+                      Your microphone and Bluetooth stay off until you choose to
+                      turn them on.
+                    </p>
+                  </div>
+                </aside>
+              </div>
+            </>
+          ) : page === "audio" ? (
+            <>
+              <PageTitle
+                title="Help starts with a few words."
+                subtitle="Explore foreground listening and practice a hands-free alert."
+              />
+              <Audio
+                ready={contacts.some((c) => !!c.verified)}
+                onTrigger={startSOS}
+              />
+            </>
+          ) : page === "tracking" ? (
+            <>
+              <PageTitle
+                title="Notice what stays nearby."
+                subtitle="Look for patterns in Bluetooth observations, without jumping to conclusions."
+              />
+              <Tracking userId={user.id} />
+            </>
+          ) : page === "photos" ? (
+            <>
+              <PageTitle
+                title="A privacy check before you share."
+                subtitle="Explore the DeepCloak photo workflow, entirely on your device."
+              />
+              <Photos />
+            </>
+          ) : page === "routes" ? (
+            <>
+              <PageTitle
+                title="A more considered way home."
+                subtitle="Compare walking routes with a little more context about the streets."
+              />
+              <Routes />
+            </>
+          ) : page === "contacts" ? (
+            <>
+              <PageTitle
+                title="Your trusted circle"
+                subtitle="Keep your people close. Practice reaching out before you need to."
+              />
+              <Contacts
+                contacts={contacts}
+                historyVersion={alertsRevision}
+                refresh={refreshContacts}
+                onSOS={() => startSOS()}
+              />
+            </>
+          ) : page === "settings" ? (
+            <>
+              <PageTitle
+                title="Your space, your settings"
+                subtitle="A clear view of permissions, data, and what this prototype can do."
+              />
+              <section className="card settings">
+                <h2>Your tools & trusted circle</h2>
+                <div className="settings-links">
+                  {[
+                    ...modules,
+                    { id: "contacts", name: "Trusted circle", icon: Users },
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      className="button secondary"
+                      onClick={() => navigate(m.id)}
+                    >
+                      <m.icon size={17} />
+                      {m.name}
+                      <ArrowRight size={14} />
+                    </button>
+                  ))}
+                </div>
+                <Install
+                  prompt={installPrompt}
+                  clearPrompt={() => setInstallPrompt(null)}
+                />
+                <h2 style={{ marginTop: 30 }}>Privacy by choice</h2>
+                <p>
+                  Microphone, Bluetooth and location are requested only when you
+                  activate a feature. Photos are processed locally and never
+                  uploaded. Raw audio is never saved or sent.
+                </p>
+                <h3>Prototype boundaries</h3>
+                <p>
+                  All SMS delivery and contact verification are simulations.
+                  Bluetooth and voice support depend on your browser. Background
+                  or locked-screen monitoring is unavailable. DeepCloak does not
+                  include a face model.
+                </p>
+                <h3>Account</h3>
+                <p>
+                  {user.email ||
+                    "This demo account is private to your session. Create an account after signing out for password-based access."}
+                </p>
+                <button
+                  className="button secondary"
+                  disabled={!online}
+                  onClick={async () => {
+                    try {
+                      await api("/auth/logout", {});
+                      setUser(null);
+                      setContacts([]);
+                      setPage("home");
+                    } catch (e) {
+                      setNotice((e as Error).message);
+                    }
+                  }}
+                >
+                  <LogOut size={17} />
+                  {online ? "Sign out" : "Connect to sign out"}
+                </button>
+              </section>
+            </>
+          ) : (
+            <section className="card">
+              <h2>Choose your next step.</h2>
+              <p>
+                Open your overview to find all four tools and your trusted
+                circle.
+              </p>
+              <button
+                className="button primary"
+                onClick={() => navigate("home")}
+              >
+                Back to overview
+              </button>
+            </section>
+          )}
+          <footer>
+            <span>
+              <ShieldCheck size={14} /> RESQ-X
+            </span>
+            <p>A safety-support prototype. Always trust your judgment.</p>
+            <button onClick={() => navigate("settings")}>
+              Privacy & limitations <ArrowUpRight size={13} />
+            </button>
+          </footer>
+        </main>
+      </div>
+      <nav className="bottom-nav" aria-label="Mobile navigation">
+        {[
+          { id: "home", name: "Home", icon: LayoutDashboard },
+          { id: "routes", name: "Routes", icon: Route },
+          { id: "tracking", name: "Tracking", icon: Radar },
+          { id: "audio", name: "Audio", icon: AudioLines },
+          { id: "more", name: "More", icon: Menu },
+        ].map((n) => (
+          <button
+            key={n.id}
+            className={page === n.id ? "selected" : ""}
+            onClick={() => navigate(n.id === "more" ? "settings" : n.id)}
+          >
+            <n.icon size={21} />
+            <span>{n.name}</span>
+          </button>
+        ))}
+      </nav>
+      {sos && (
+        <SOS
+          type={sos}
+          onClose={() => {
+            setSos(null);
+            setAlertsRevision((v) => v + 1);
+            setPage("contacts");
+          }}
+        />
+      )}
+      {notice && (
+        <div role="status" className="toast">
+          {notice}
+          <button
+            aria-label="Dismiss notification"
+            onClick={() => setNotice("")}
+          >
+            ×
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
-export function Brand(){return <div className="brand"><span><ShieldCheck size={23}/></span><strong>RESQ<span>-X</span></strong></div>}
-export function PageTitle({title,subtitle}:{title:string;subtitle:string}){return <div className="page-heading"><div><p className="eyebrow">Your everyday toolkit</p><h1>{title}</h1><p>{subtitle}</p></div></div>}
-function Auth({onUser}:{onUser:(u:User)=>void}){const [register,setRegister]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');async function send(path:string,data:unknown){setBusy(true);setError('');try{onUser(await api<User>(path,data))}catch(e){setError((e as Error).message)}finally{setBusy(false)}}return <div className="auth-page"><section className="auth-story"><Brand/><div><span className="pill light"><ShieldCheck size={15}/>An everyday safety companion</span><h1>A little backup.<br/>A lot more<br/>peace of mind.</h1><p>Your routes, your privacy, your people.<br/>One thoughtful space to bring them together.</p><div className="auth-tools">{modules.map(m=><span key={m.id}><m.icon size={22}/>{m.name}</span>)}</div></div><small>A safety-support prototype. You stay in control.</small></section><section className="auth-form"><div className="auth-mobile-brand"><Brand/></div><span className="module-icon teal"><ShieldCheck size={28}/></span><h2>{register?'Make this space yours.':'Welcome to your safety space.'}</h2><p>{register?'Start with your account. Enable only what you need.':'Sign in to keep your trusted circle close.'}</p><form onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);send('/auth/'+(register?'register':'login'),Object.fromEntries(f))}}>{register&&<label>Your name<input name="name" required maxLength={60} autoComplete="name" placeholder="What should we call you?"/></label>}<label>Email address<input name="email" type="email" required autoComplete="email" placeholder="you@example.com" maxLength={254}/></label><label>Password<input name="password" type="password" minLength={10} maxLength={128} required autoComplete={register?'new-password':'current-password'} placeholder="At least 10 characters"/></label>{error&&<p role="alert" className="error">{error}</p>}<button className="button primary full" disabled={busy}>{busy?'One moment…':register?'Create account':'Sign in'}<ArrowRight size={17}/></button></form><button className="text-button auth-switch" onClick={()=>{setRegister(!register);setError('')}}>{register?'Already have an account? Sign in':'New here? Create an account'}</button><div className="divider"><span>or take a look around</span></div><button className="button secondary full" disabled={busy} onClick={()=>send('/auth/demo',{})}>Try the demo <ArrowUpRight size={17}/></button><p className="fine-print"><LockKeyhole size={13}/>No permissions requested until you enable a tool.</p></section></div>}
+export function Brand() {
+  return (
+    <div className="brand">
+      <span>
+        <ShieldCheck size={23} />
+      </span>
+      <strong>
+        RESQ<span>-X</span>
+      </strong>
+    </div>
+  );
+}
+export function PageTitle({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div className="page-heading">
+      <div>
+        <p className="eyebrow">Your everyday toolkit</p>
+        <h1>{title}</h1>
+        <p>{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+function Auth({ onUser }: { onUser: (u: User) => void }) {
+  const [register, setRegister] = useState(false),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState("");
+  async function send(path: string, data: unknown) {
+    setBusy(true);
+    setError("");
+    try {
+      onUser(await api<User>(path, data));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="auth-page">
+      <section className="auth-story">
+        <Brand />
+        <div>
+          <span className="pill light">
+            <ShieldCheck size={15} />
+            An everyday safety companion
+          </span>
+          <h1>
+            A little backup.
+            <br />A lot more
+            <br />
+            peace of mind.
+          </h1>
+          <p>
+            Your routes, your privacy, your people.
+            <br />
+            One thoughtful space to bring them together.
+          </p>
+          <div className="auth-tools">
+            {modules.map((m) => (
+              <span key={m.id}>
+                <m.icon size={22} />
+                {m.name}
+              </span>
+            ))}
+          </div>
+        </div>
+        <small>A safety-support prototype. You stay in control.</small>
+      </section>
+      <section className="auth-form">
+        <div className="auth-mobile-brand">
+          <Brand />
+        </div>
+        <span className="module-icon teal">
+          <ShieldCheck size={28} />
+        </span>
+        <h2>
+          {register
+            ? "Make this space yours."
+            : "Welcome to your safety space."}
+        </h2>
+        <p>
+          {register
+            ? "Start with your account. Enable only what you need."
+            : "Sign in to keep your trusted circle close."}
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const f = new FormData(e.currentTarget);
+            send(
+              "/auth/" + (register ? "register" : "login"),
+              Object.fromEntries(f),
+            );
+          }}
+        >
+          {register && (
+            <label>
+              Your name
+              <input
+                name="name"
+                required
+                maxLength={60}
+                autoComplete="name"
+                placeholder="What should we call you?"
+              />
+            </label>
+          )}
+          <label>
+            Email address
+            <input
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="you@example.com"
+              maxLength={254}
+            />
+          </label>
+          <label>
+            Password
+            <input
+              name="password"
+              type="password"
+              minLength={10}
+              maxLength={128}
+              required
+              autoComplete={register ? "new-password" : "current-password"}
+              placeholder="At least 10 characters"
+            />
+          </label>
+          {error && (
+            <p role="alert" className="error">
+              {error}
+            </p>
+          )}
+          <button className="button primary full" disabled={busy}>
+            {busy ? "One moment…" : register ? "Create account" : "Sign in"}
+            <ArrowRight size={17} />
+          </button>
+        </form>
+        <button
+          className="text-button auth-switch"
+          onClick={() => {
+            setRegister(!register);
+            setError("");
+          }}
+        >
+          {register
+            ? "Already have an account? Sign in"
+            : "New here? Create an account"}
+        </button>
+        <div className="divider">
+          <span>or take a look around</span>
+        </div>
+        <button
+          className="button secondary full"
+          disabled={busy}
+          onClick={() => send("/auth/demo", {})}
+        >
+          Try the demo <ArrowUpRight size={17} />
+        </button>
+        <p className="fine-print">
+          <LockKeyhole size={13} />
+          No permissions requested until you enable a tool.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+function Install({
+  prompt,
+  clearPrompt,
+}: {
+  prompt: any;
+  clearPrompt: () => void;
+}) {
+  const [installed, setInstalled] = useState(
+    window.matchMedia("(display-mode: standalone)").matches,
+  );
+  useEffect(() => {
+    const done = () => {
+      setInstalled(true);
+      clearPrompt();
+    };
+    window.addEventListener("appinstalled", done);
+    return () => window.removeEventListener("appinstalled", done);
+  }, []);
+  return (
+    <div className="install-panel">
+      <Download size={24} />
+      <div>
+        <h3>
+          {installed
+            ? "You’re using the installed app."
+            : "Make room for a little backup."}
+        </h3>
+        <p>
+          Install RESQ-X for a full-screen mobile experience. Photo, Bluetooth
+          and route demos work offline after your first visit.
+        </p>
+        {prompt ? (
+          <button
+            className="button primary"
+            onClick={async () => {
+              await prompt.prompt();
+              await prompt.userChoice;
+              clearPrompt();
+            }}
+          >
+            Install RESQ-X <Download size={16} />
+          </button>
+        ) : (
+          !installed && (
+            <p className="small-text">
+              In Safari, tap Share → Add to Home Screen. In Chrome, use the menu
+              → Install app. Installation is offered on HTTPS or localhost.
+            </p>
+          )
+        )}
+      </div>
+    </div>
+  );
+}

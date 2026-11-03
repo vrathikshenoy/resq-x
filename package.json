@@ -1,11 +1,33 @@
 {
-  "name": "resq-x", "version": "0.1.0", "private": true, "type": "module",
-  "engines": { "node": ">=22.13.0" },
-  "scripts": {
-    "dev": "node scripts/dev.mjs", "dev:web": "vite --host 0.0.0.0", "dev:api": "node --watch backend/server.mjs",
-    "build": "tsc --noEmit && vite build", "start": "node backend/server.mjs", "test": "node tests/api.test.mjs", "test:e2e": "node tests/browser.mjs",
-    "native:sync": "npm run build && npx cap sync", "native:android": "npx cap open android", "native:ios": "npx cap open ios"
+  "name": "resq-x",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
   },
-  "dependencies": { "react": "19.1.0", "react-dom": "19.1.0", "lucide-react": "0.454.0" },
-  "devDependencies": { "@types/react": "^19.0.0", "@types/react-dom": "^19.0.0", "vite": "7.0.5", "typescript": "5.8.3", "playwright": "^1.58.0" }
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite --host 0.0.0.0",
+    "dev:api": "node --watch backend/server.mjs",
+    "build": "tsc --noEmit && vite build && node scripts/build-sw.mjs",
+    "start": "node --env-file-if-exists=.env backend/server.mjs",
+    "test": "node tests/api.test.mjs",
+    "test:e2e": "node tests/browser.mjs",
+    "native:sync": "npm run build && npx --no-install cap sync",
+    "native:android": "npx --no-install cap open android",
+    "native:ios": "npx --no-install cap open ios"
+  },
+  "dependencies": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "lucide-react": "0.454.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.2",
+    "@types/react-dom": "19.1.2",
+    "vite": "7.0.5",
+    "typescript": "5.8.3",
+    "playwright": "1.62.1"
+  }
 }

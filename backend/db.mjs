@@ -1,8 +1,9 @@
-import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
-const file = process.env.DATABASE_PATH || 'data/resq-x.sqlite';
-if(file!==':memory:') mkdirSync(dirname(file), {recursive:true, mode:0o700});
+import { DatabaseSync } from "node:sqlite";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+const file = process.env.DATABASE_PATH || "data/resq-x.sqlite";
+if (file !== ":memory:")
+  mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
 export const db = new DatabaseSync(file);
 db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE, hash TEXT, salt TEXT, created TEXT NOT NULL);

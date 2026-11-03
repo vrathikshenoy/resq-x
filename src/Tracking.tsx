@@ -1,23 +1,496 @@
-import {useState,useEffect,useRef} from 'react';
-import {Radar,Bluetooth,Play,Square,ShieldCheck,TriangleAlert,Check,RotateCcw,Footprints,Radio,Info} from 'lucide-react';
-import {appendObservation,summarizeDevice,approximateDistance,type Device} from './lib/tracking.mjs';
-type BLEDevice=EventTarget&{id:string;name?:string};
-type BLEScan={stop:()=>void;active:boolean};
-type BluetoothAPI=EventTarget&{requestLEScan?:(options:{acceptAllAdvertisements:boolean;keepRepeatedDevices:boolean})=>Promise<BLEScan>};
-export function Tracking({userId}:{userId:string}){
- const key='resqx-tracking-'+userId;const [mode,setMode]=useState('demo'),[devices,setDevices]=useState<Device[]>([]),[trusted,setTrusted]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem(key)||'[]')}catch{return []}}),[scanning,setScanning]=useState(false),[moved,setMoved]=useState(false),[error,setError]=useState(''),[selected,setSelected]=useState<string|null>(null),[reference,setReference]=useState(-59),[loss,setLoss]=useState(2),[tick,setTick]=useState(Date.now());const cleanup=useRef<(()=>void)|null>(null),active=useRef(true),run=useRef(0),demoCount=useRef(0);
- const bluetooth=(navigator as Navigator&{bluetooth?:BluetoothAPI}).bluetooth;
- function stop(){run.current++;cleanup.current?.();cleanup.current=null;setScanning(false)}
- useEffect(()=>{active.current=true;const hide=()=>{if(document.hidden)stop()};document.addEventListener('visibilitychange',hide);const id=setInterval(()=>setTick(Date.now()),5000);return()=>{active.current=false;run.current++;cleanup.current?.();clearInterval(id);document.removeEventListener('visibilitychange',hide)}},[]);
- function trust(id:string){const next=trusted.includes(id)?trusted.filter(t=>t!==id):[...trusted,id];try{localStorage.setItem(key,JSON.stringify(next));setTrusted(next)}catch{setError('Device trust could not be saved. Browser storage may be full.')}}
- async function start(){stop();setScanning(true);setError('');const current=run.current,session=crypto.randomUUID();const observe=(id:string,name:string,rssi:number)=>{if(active.current&&current===run.current)setDevices(old=>appendObservation(old,{id,name,rssi,time:Date.now(),session,moved}))};
-  if(mode==='demo'){const count=++demoCount.current;let sample=0;const interval=setInterval(()=>{sample++;observe('demo-tag','Unfamiliar sample tag',-60+(count%3)*2+sample%2);observe('demo-headphones','Sample headphones',-47+sample%3);if(count===1)observe('demo-watch','Passing sample watch',-83);},650);const timeout=setTimeout(stop,3000);cleanup.current=()=>{clearInterval(interval);clearTimeout(timeout)};return;}
-  if(!bluetooth?.requestLEScan){setError('Passive BLE advertisement scanning is unavailable in this browser. Use the labeled demo. A device picker cannot scan all nearby trackers.');setScanning(false);return;}
-  try{const scan=await bluetooth.requestLEScan({acceptAllAdvertisements:true,keepRepeatedDevices:true});if(current!==run.current||!active.current){scan.stop();return}const listener=(event:Event)=>{const e=event as Event&{device:BLEDevice;rssi?:number};if(Number.isFinite(e.rssi))observe(e.device.id,e.device.name||'Unnamed BLE device',e.rssi!)};bluetooth.addEventListener('advertisementreceived',listener);const timeout=setTimeout(stop,15000);cleanup.current=()=>{clearTimeout(timeout);scan.stop();bluetooth.removeEventListener('advertisementreceived',listener)};}catch(e){setError((e as Error).name==='NotAllowedError'?'Bluetooth permission was denied. You can still use the demo.':'Bluetooth scan could not start. Check permissions and device support.');setScanning(false);}
- }
- const device=devices.find(d=>d.id===selected),warnings=devices.filter(d=>summarizeDevice(d.observations,trusted.includes(d.id)).persistent);
- return <div className="stack"><div className="notice warning"><strong>{mode==='demo'?'Simulated Bluetooth observations.':'Experimental foreground BLE scanning.'}</strong> {mode==='demo'?'Sample devices are generated locally. Nothing is being scanned.':'Unknown devices are not necessarily trackers. Identifiers can rotate and many trackers cannot be observed.'} RSSI cannot provide an exact bearing.</div><div className="feature-grid"><div className="stack"><section className="card"><div className="section-title"><h2>Nearby device awareness</h2><span className="pill">{scanning?'Scan active':'Not scanning'}</span></div><div className="tracking-stage"><div className={'radar-graphic '+(scanning?'scanning':'')} aria-hidden="true"><div/><div/><div/><Radar size={58} strokeWidth={1}/></div><h3>{scanning?mode==='demo'?'Running a sample scan…':'Listening for BLE advertisements…':'A little awareness of what’s nearby.'}</h3><p>{mode==='demo'?'Explore repeated detections with fictional devices.':'Scan while this screen is open. Bluetooth permission is required.'}</p></div><div className="segmented"><button disabled={scanning} className={mode==='demo'?'chosen':''} onClick={()=>{setMode('demo');setDevices([]);setSelected(null)}}>Simulation</button><button disabled={scanning} className={mode==='live'?'chosen':''} onClick={()=>{setMode('live');setDevices([]);setSelected(null)}}>Real BLE scan</button></div><label className="check-label"><input type="checkbox" checked={moved} disabled={scanning} onChange={e=>setMoved(e.target.checked)}/><span>I moved since the previous scan.<br/><small>Self-reported movement, not a sensor measurement.</small></span></label><button className={'button full '+(scanning?'secondary':'primary')} onClick={scanning?stop:start}>{scanning?<><Square size={16}/>Stop scan</>:<><Bluetooth size={17}/>{mode==='demo'?'Run sample scan':'Start foreground scan'}</>}</button>{error&&<p className="error" role="alert" style={{marginTop:15}}>{error}</p>}<p className="fine-print">{mode==='demo'?'Each sample scan runs for 3 seconds. Repeat three times and mark movement twice to explore the warning.':'Scans stop after 15 seconds or when this app is hidden. No device data is uploaded.'}</p></section>
- {warnings.length>0&&<div className="notice warning" role="status"><strong>An unfamiliar device has repeatedly appeared nearby.</strong> This experimental rule checks three scans with two self-reported movements. It does not prove stalking. Select a device to inspect the pattern.</div>}
- <section className="card"><div className="section-title"><h2>Observed devices</h2><span className="pill">{devices.length} this visit</span></div>{!devices.length?<div className="empty"><Radio size={32}/><p>Start a scan to see observations here.</p></div>:<div className="device-list">{devices.map(d=>{const summary=summarizeDevice(d.observations,trusted.includes(d.id)),last=d.observations.at(-1)!;return <article key={d.id} className={'device-item '+(selected===d.id?'selected':'')}><button className="device-select" onClick={()=>setSelected(d.id)}><span className={'device-badge '+(summary.persistent?'caution':'')}><Bluetooth size={20}/></span><span className="grow"><strong>{d.name}</strong><small>{summary.sessions} scan sessions · {Math.max(0,Math.floor((tick-last.time)/1000))}s since last seen</small><em>{trusted.includes(d.id)?'Trusted by you':summary.persistent?'Repeated detection with reported movement':'Unknown · observe again'}</em></span><span className="rssi">{last.rssi}<small>dBm</small></span></button><button className="text-button" onClick={()=>trust(d.id)}>{trusted.includes(d.id)?<><Check size={13}/>Trusted — undo</>:<><ShieldCheck size={13}/>Mark as trusted</>}</button></article>})}</div>}<button className="text-button" disabled={scanning} onClick={()=>{setDevices([]);setSelected(null);demoCount.current=0}}><RotateCcw size={13}/>Clear scan history</button></section></div>
- <aside className="stack">{device?<section className="card"><h2>{device.name}</h2><span className="pill">{trusted.includes(device.id)?'Trusted by you':'Unknown device'}</span><div className="signal-chart" aria-label="RSSI signal history">{device.observations.map((o,i)=><div key={i} style={{height:Math.max(5,Math.min(100,(o.rssi+110)/.7))+'%'}} title={`${o.rssi} dBm`}/>)}</div><p className="small-text">{summarizeDevice(device.observations,trusted.includes(device.id)).trend}. Higher bars mean stronger signal, not direction.</p><dl className="metrics"><div><dt>Repeated sessions</dt><dd>{summarizeDevice(device.observations).sessions}</dd></div><div><dt>Reported movement sessions</dt><dd>{summarizeDevice(device.observations).movedSessions}</dd></div><div><dt>Rough model estimate</dt><dd>~{approximateDistance(device.observations.at(-1)!.rssi,reference,loss).toFixed(1)} m</dd></div></dl><label>Reference RSSI at 1 m (dBm)<input type="number" min={-100} max={-20} value={reference} onChange={e=>{const n=Number(e.target.value);setReference(Math.max(-100,Math.min(-20,n)))}}/></label><label>Path-loss factor (calibration)<input type="number" min={1} max={6} step={.1} value={loss} onChange={e=>{const n=Number(e.target.value);setLoss(Math.max(1,Math.min(6,n)))}}/></label><p className="small-text">Distance uses d = 10^((A − RSSI)/(10n)). Defaults are uncalibrated. Walls, bodies and interference can change the estimate substantially.</p></section>:<section className="card"><span className="module-icon blue"><Footprints size={23}/></span><h2 style={{marginTop:19}}>Patterns, not assumptions.</h2><p className="small-text">A single observation tells very little. Repeat a scan after moving, then look at persistence and signal history. Select a device to see its readings.</p><p className="small-text">Devices you trust stay on your local trust list for this account. Scan history clears when you leave this screen.</p></section>}<section className="card"><h3>Investigate safely</h3><p className="small-text">Check belongings in a public place. Ask someone you trust for help. Use official unwanted-tracker alerts and manufacturer guidance. Don’t confront someone based on these readings.</p><p className="small-text">There is no directional radar or confirmed stalking detection in this prototype.</p></section></aside></div></div>
+import { useState, useEffect, useRef } from "react";
+import {
+  Radar,
+  Bluetooth,
+  Square,
+  ShieldCheck,
+  Check,
+  RotateCcw,
+  Footprints,
+  Radio,
+} from "lucide-react";
+import {
+  appendObservation,
+  summarizeDevice,
+  approximateDistance,
+  type Device,
+} from "./lib/tracking.mjs";
+type BLEDevice = EventTarget & { id: string; name?: string };
+type BLEScan = { stop: () => void; active: boolean };
+type BluetoothAPI = EventTarget & {
+  requestLEScan?: (options: {
+    acceptAllAdvertisements: boolean;
+    keepRepeatedDevices: boolean;
+  }) => Promise<BLEScan>;
+};
+export function Tracking({ userId }: { userId: string }) {
+  const key = "resqx-tracking-" + userId;
+  const [mode, setMode] = useState("demo"),
+    [devices, setDevices] = useState<Device[]>([]),
+    [trusted, setTrusted] = useState<string[]>(() => {
+      try {
+        const value = JSON.parse(localStorage.getItem(key) || "[]");
+        return Array.isArray(value)
+          ? value.filter((s: unknown) => typeof s === "string").slice(0, 25)
+          : [];
+      } catch {
+        return [];
+      }
+    }),
+    [scanning, setScanning] = useState(false),
+    [moved, setMoved] = useState(false),
+    [error, setError] = useState(""),
+    [selected, setSelected] = useState<string | null>(null),
+    [reference, setReference] = useState(-59),
+    [loss, setLoss] = useState(2),
+    [tick, setTick] = useState(Date.now());
+  const cleanup = useRef<(() => void) | null>(null),
+    active = useRef(true),
+    run = useRef(0),
+    demoCount = useRef(0);
+  const bluetooth = (navigator as Navigator & { bluetooth?: BluetoothAPI })
+    .bluetooth;
+  function stop() {
+    run.current++;
+    cleanup.current?.();
+    cleanup.current = null;
+    setScanning(false);
+  }
+  useEffect(() => {
+    active.current = true;
+    const hide = () => {
+      if (document.hidden) stop();
+    };
+    document.addEventListener("visibilitychange", hide);
+    const id = setInterval(() => setTick(Date.now()), 5000);
+    return () => {
+      active.current = false;
+      run.current++;
+      cleanup.current?.();
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", hide);
+    };
+  }, []);
+  function trust(id: string) {
+    const next = trusted.includes(id)
+      ? trusted.filter((t) => t !== id)
+      : [...trusted, id];
+    try {
+      localStorage.setItem(key, JSON.stringify(next));
+      setTrusted(next);
+    } catch {
+      setError("Device trust could not be saved. Browser storage may be full.");
+    }
+  }
+  async function start() {
+    stop();
+    setScanning(true);
+    setError("");
+    const current = run.current,
+      session = crypto.randomUUID();
+    const observe = (id: string, name: string, rssi: number) => {
+      if (active.current && current === run.current)
+        setDevices((old) =>
+          appendObservation(old, {
+            id,
+            name,
+            rssi,
+            time: Date.now(),
+            session,
+            moved,
+          }),
+        );
+    };
+    if (mode === "demo") {
+      const count = ++demoCount.current;
+      let sample = 0;
+      const interval = setInterval(() => {
+        sample++;
+        observe(
+          "demo-tag",
+          "Unfamiliar sample tag",
+          -60 + (count % 3) * 2 + (sample % 2),
+        );
+        observe("demo-headphones", "Sample headphones", -47 + (sample % 3));
+        if (count === 1) observe("demo-watch", "Passing sample watch", -83);
+      }, 650);
+      const timeout = setTimeout(stop, 3000);
+      cleanup.current = () => {
+        clearInterval(interval);
+        clearTimeout(timeout);
+      };
+      return;
+    }
+    if (!bluetooth?.requestLEScan) {
+      setError(
+        "Passive BLE advertisement scanning is unavailable in this browser. Use the labeled demo. A device picker cannot scan all nearby trackers.",
+      );
+      setScanning(false);
+      return;
+    }
+    try {
+      const scan = await bluetooth.requestLEScan({
+        acceptAllAdvertisements: true,
+        keepRepeatedDevices: true,
+      });
+      if (current !== run.current || !active.current) {
+        scan.stop();
+        return;
+      }
+      const listener = (event: Event) => {
+        const e = event as Event & { device: BLEDevice; rssi?: number };
+        if (Number.isFinite(e.rssi))
+          observe(e.device.id, e.device.name || "Unnamed BLE device", e.rssi!);
+      };
+      bluetooth.addEventListener("advertisementreceived", listener);
+      const timeout = setTimeout(stop, 15000);
+      cleanup.current = () => {
+        clearTimeout(timeout);
+        scan.stop();
+        bluetooth.removeEventListener("advertisementreceived", listener);
+      };
+    } catch (e) {
+      setError(
+        (e as Error).name === "NotAllowedError"
+          ? "Bluetooth permission was denied. You can still use the demo."
+          : "Bluetooth scan could not start. Check permissions and device support.",
+      );
+      setScanning(false);
+    }
+  }
+  const device = devices.find((d) => d.id === selected),
+    warnings = devices.filter(
+      (d) => summarizeDevice(d.observations, trusted.includes(d.id)).persistent,
+    );
+  return (
+    <div className="stack">
+      <div className="notice warning">
+        <strong>
+          {mode === "demo"
+            ? "Simulated Bluetooth observations."
+            : "Experimental foreground BLE scanning."}
+        </strong>{" "}
+        {mode === "demo"
+          ? "Sample devices are generated locally. Nothing is being scanned."
+          : "Unknown devices are not necessarily trackers. Identifiers can rotate and many trackers cannot be observed."}{" "}
+        RSSI cannot provide an exact bearing.
+      </div>
+      <div className="feature-grid">
+        <div className="stack">
+          <section className="card">
+            <div className="section-title">
+              <h2>Nearby device awareness</h2>
+              <span className="pill">
+                {scanning ? "Scan active" : "Not scanning"}
+              </span>
+            </div>
+            <div className="tracking-stage">
+              <div
+                className={"radar-graphic " + (scanning ? "scanning" : "")}
+                aria-hidden="true"
+              >
+                <div />
+                <div />
+                <div />
+                <Radar size={58} strokeWidth={1} />
+              </div>
+              <h3>
+                {scanning
+                  ? mode === "demo"
+                    ? "Running a sample scan…"
+                    : "Listening for BLE advertisements…"
+                  : "A little awareness of what’s nearby."}
+              </h3>
+              <p>
+                {mode === "demo"
+                  ? "Explore repeated detections with fictional devices."
+                  : "Scan while this screen is open. Bluetooth permission is required."}
+              </p>
+            </div>
+            <div className="segmented">
+              <button
+                disabled={scanning}
+                className={mode === "demo" ? "chosen" : ""}
+                onClick={() => {
+                  setMode("demo");
+                  setDevices([]);
+                  setSelected(null);
+                }}
+              >
+                Simulation
+              </button>
+              <button
+                disabled={scanning}
+                className={mode === "live" ? "chosen" : ""}
+                onClick={() => {
+                  setMode("live");
+                  setDevices([]);
+                  setSelected(null);
+                }}
+              >
+                Real BLE scan
+              </button>
+            </div>
+            <label className="check-label">
+              <input
+                type="checkbox"
+                checked={moved}
+                disabled={scanning}
+                onChange={(e) => setMoved(e.target.checked)}
+              />
+              <span>
+                I moved since the previous scan.
+                <br />
+                <small>Self-reported movement, not a sensor measurement.</small>
+              </span>
+            </label>
+            <button
+              className={"button full " + (scanning ? "secondary" : "primary")}
+              onClick={scanning ? stop : start}
+            >
+              {scanning ? (
+                <>
+                  <Square size={16} />
+                  Stop scan
+                </>
+              ) : (
+                <>
+                  <Bluetooth size={17} />
+                  {mode === "demo"
+                    ? "Run sample scan"
+                    : "Start foreground scan"}
+                </>
+              )}
+            </button>
+            {error && (
+              <p className="error" role="alert" style={{ marginTop: 15 }}>
+                {error}
+              </p>
+            )}
+            <p className="fine-print">
+              {mode === "demo"
+                ? "Each sample scan runs for 3 seconds. Repeat three times and mark movement twice to explore the warning."
+                : "Scans stop after 15 seconds or when this app is hidden. No device data is uploaded."}
+            </p>
+          </section>
+          {warnings.length > 0 && (
+            <div className="notice warning" role="status">
+              <strong>
+                An unfamiliar device has repeatedly appeared nearby.
+              </strong>{" "}
+              This experimental rule checks three scans with two self-reported
+              movements. It does not prove stalking. Select a device to inspect
+              the pattern.
+            </div>
+          )}
+          <section className="card">
+            <div className="section-title">
+              <h2>Observed devices</h2>
+              <span className="pill">{devices.length} this visit</span>
+            </div>
+            {!devices.length ? (
+              <div className="empty">
+                <Radio size={32} />
+                <p>Start a scan to see observations here.</p>
+              </div>
+            ) : (
+              <div className="device-list">
+                {devices.map((d) => {
+                  const summary = summarizeDevice(
+                      d.observations,
+                      trusted.includes(d.id),
+                    ),
+                    last = d.observations.at(-1)!;
+                  return (
+                    <article
+                      key={d.id}
+                      className={
+                        "device-item " + (selected === d.id ? "selected" : "")
+                      }
+                    >
+                      <button
+                        className="device-select"
+                        onClick={() => setSelected(d.id)}
+                      >
+                        <span
+                          className={
+                            "device-badge " +
+                            (summary.persistent ? "caution" : "")
+                          }
+                        >
+                          <Bluetooth size={20} />
+                        </span>
+                        <span className="grow">
+                          <strong>{d.name}</strong>
+                          <small>
+                            {summary.sessions} scan sessions ·{" "}
+                            {Math.max(0, Math.floor((tick - last.time) / 1000))}
+                            s since last seen
+                          </small>
+                          <em>
+                            {trusted.includes(d.id)
+                              ? "Trusted by you"
+                              : summary.persistent
+                                ? "Repeated detection with reported movement"
+                                : "Unknown · observe again"}
+                          </em>
+                        </span>
+                        <span className="rssi">
+                          {last.rssi}
+                          <small>dBm</small>
+                        </span>
+                      </button>
+                      <button
+                        className="text-button"
+                        onClick={() => trust(d.id)}
+                      >
+                        {trusted.includes(d.id) ? (
+                          <>
+                            <Check size={13} />
+                            Trusted — undo
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck size={13} />
+                            Mark as trusted
+                          </>
+                        )}
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+            <button
+              className="text-button"
+              disabled={scanning}
+              onClick={() => {
+                setDevices([]);
+                setSelected(null);
+                demoCount.current = 0;
+              }}
+            >
+              <RotateCcw size={13} />
+              Clear scan history
+            </button>
+          </section>
+        </div>
+        <aside className="stack">
+          {device ? (
+            <section className="card">
+              <h2>{device.name}</h2>
+              <span className="pill">
+                {trusted.includes(device.id)
+                  ? "Trusted by you"
+                  : "Unknown device"}
+              </span>
+              <div className="signal-chart" aria-label="RSSI signal history">
+                {device.observations.map((o, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      height:
+                        Math.max(5, Math.min(100, (o.rssi + 110) / 0.7)) + "%",
+                    }}
+                    title={`${o.rssi} dBm`}
+                  />
+                ))}
+              </div>
+              <p className="small-text">
+                {
+                  summarizeDevice(
+                    device.observations,
+                    trusted.includes(device.id),
+                  ).trend
+                }
+                . Higher bars mean stronger signal, not direction.
+              </p>
+              <dl className="metrics">
+                <div>
+                  <dt>Repeated sessions</dt>
+                  <dd>{summarizeDevice(device.observations).sessions}</dd>
+                </div>
+                <div>
+                  <dt>Reported movement sessions</dt>
+                  <dd>{summarizeDevice(device.observations).movedSessions}</dd>
+                </div>
+                <div>
+                  <dt>Rough model estimate</dt>
+                  <dd>
+                    ~
+                    {approximateDistance(
+                      device.observations.at(-1)!.rssi,
+                      reference,
+                      loss,
+                    ).toFixed(1)}{" "}
+                    m
+                  </dd>
+                </div>
+              </dl>
+              <label>
+                Reference RSSI at 1 m (dBm)
+                <input
+                  type="number"
+                  min={-100}
+                  max={-20}
+                  value={reference}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    setReference(Math.max(-100, Math.min(-20, n)));
+                  }}
+                />
+              </label>
+              <label>
+                Path-loss factor (calibration)
+                <input
+                  type="number"
+                  min={1}
+                  max={6}
+                  step={0.1}
+                  value={loss}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    setLoss(Math.max(1, Math.min(6, n)));
+                  }}
+                />
+              </label>
+              <p className="small-text">
+                Distance uses d = 10^((A − RSSI)/(10n)). Defaults are
+                uncalibrated. Walls, bodies and interference can change the
+                estimate substantially.
+              </p>
+            </section>
+          ) : (
+            <section className="card">
+              <span className="module-icon blue">
+                <Footprints size={23} />
+              </span>
+              <h2 style={{ marginTop: 19 }}>Patterns, not assumptions.</h2>
+              <p className="small-text">
+                A single observation tells very little. Repeat a scan after
+                moving, then look at persistence and signal history. Select a
+                device to see its readings.
+              </p>
+              <p className="small-text">
+                Devices you trust stay on your local trust list for this
+                account. Scan history clears when you leave this screen.
+              </p>
+            </section>
+          )}
+          <section className="card">
+            <h3>Investigate safely</h3>
+            <p className="small-text">
+              Check belongings in a public place. Ask someone you trust for
+              help. Use official unwanted-tracker alerts and manufacturer
+              guidance. Don’t confront someone based on these readings.
+            </p>
+            <p className="small-text">
+              There is no directional radar or confirmed stalking detection in
+              this prototype.
+            </p>
+          </section>
+        </aside>
+      </div>
+    </div>
+  );
 }
