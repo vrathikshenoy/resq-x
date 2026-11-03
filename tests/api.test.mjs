@@ -64,3 +64,8 @@ test('tracking requires separate sessions and movement; trusted devices suppress
  assert.equal(approximateDistance(-59,-59,2),1);assert.throws(()=>approximateDistance(-59,-59,0),/calibration/);
  for(let i=0;i<40;i++)devices=appendObservation(devices,{id:'tag',name:'Sample tag',rssi:-60,time:i,session:'extra',moved:false});assert.equal(devices[0].observations.length,30);
 });
+test('audio circular buffer is bounded and phrase matching uses confidence and whole words',async()=>{
+ const {AudioWindow,matchesPhrase}=await import('../public/audio-core.mjs');const audio=new AudioWindow(8000);assert.equal(audio.buffer.length,12000);
+ audio.push(new Float32Array(20000).fill(.5));assert.equal(audio.buffer.length,12000);assert.equal(audio.position,8000);assert.equal(audio.push(new Float32Array([.5,.5])),.5);audio.clear();assert.equal(audio.buffer.some(Boolean),false);
+ assert.equal(matchesPhrase('Hey ResQ, help!','Hey ResQ help',.9),true);assert.equal(matchesPhrase('Hey ResQ helpful','Hey ResQ help',.9),false);assert.equal(matchesPhrase('Hey ResQ help','Hey ResQ help',.3),false);
+});
