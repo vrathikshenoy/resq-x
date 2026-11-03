@@ -488,3 +488,83 @@ test("map coordinates and tile projection round trip without external tile downl
   );
   assert.ok(view.zoom >= 2 && view.zoom <= 17);
 });
+
+test("Overpass retries server outages, identifies DNS failure and respects rate limits", async () => {
+  const { fetchStreetElements } = await import("../backend/overpass.mjs");
+  const previousFetch = globalThis.fetch,
+    previousURL = process.env.OVERPASS_URL;
+  delete process.env.OVERPASS_URL;
+  try {
+    const calls = [];
+    globalThis.fetch = async (url) => {
+      calls.push(url);
+      return calls.length === 1
+        ? new Response("Busy", { status: 504 })
+        : new Response(JSON.stringify({ elements: [] }));
+    };
+    const result = await fetchStreetElements("[out:json];node(1);out;");
+    assert.equal(
+      result.endpoint,
+      "https://overpass.private.coffee/api/interpreter",
+    );
+    assert.equal(calls.length, 2);
+    globalThis.fetch = async () => {
+      throw Object.assign(new Error("fetch failed"), {
+        cause: { code: "ENOTFOUND" },
+      });
+    };
+    await assert.rejects(
+      () => fetchStreetElements("query"),
+      (error) =>
+        error.status === 503 &&
+        /DNS lookup failed/.test(error.message) &&
+        /overpass-api.de/.test(error.message) &&
+        /overpass.private.coffee/.test(error.message),
+    );
+    let limitedCalls = 0;
+    globalThis.fetch = async () => {
+      limitedCalls++;
+      return new Response("Rate limited", { status: 429 });
+    };
+    await assert.rejects(
+      () => fetchStreetElements("query"),
+      (error) => error.status === 429 && /rate-limited/.test(error.message),
+    );
+    assert.equal(limitedCalls, 1);
+    globalThis.fetch = async () => new Response("Bad query", { status: 400 });
+    await assert.rejects(
+      () => fetchStreetElements("query"),
+      (error) => error.status === 502 && /HTTP 400/.test(error.message),
+    );
+    globalThis.fetch = async () => {
+      throw Object.assign(new Error("timeout"), { name: "TimeoutError" });
+    };
+    await assert.rejects(() => fetchStreetElements("query"), /timed out/);
+    globalThis.fetch = async () => new Response("<html>not json</html>");
+    await assert.rejects(() => fetchStreetElements("query"), /invalid JSON/);
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ remark: "runtime error", elements: [] }));
+    await assert.rejects(
+      () => fetchStreetElements("query"),
+      /could not complete/,
+    );
+    process.env.OVERPASS_URL = "https://configured.example/api/interpreter";
+    globalThis.fetch = async (url) => {
+      assert.equal(url, process.env.OVERPASS_URL);
+      return new Response(JSON.stringify({ elements: [] }));
+    };
+    assert.equal(
+      (await fetchStreetElements("query")).endpoint,
+      process.env.OVERPASS_URL,
+    );
+    process.env.OVERPASS_URL = "http://invalid.example/api/interpreter";
+    await assert.rejects(
+      () => fetchStreetElements("query"),
+      /must be an HTTPS/,
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousURL === undefined) delete process.env.OVERPASS_URL;
+    else process.env.OVERPASS_URL = previousURL;
+  }
+});

@@ -34,7 +34,7 @@ Run Python unittest tests for authentication, isolation, contact input, idempote
 
 ## Final outcome
 
-All seven implementation stages completed as prototype code, with separate feature commits. Fifteen API/algorithm/startup test groups and the production build pass. Routing and audio phrase logic are shared between runtime and tests. PWA packaging caches only public shell assets. `README.md` documents actual behavior and explicit simulations.
+All seven implementation stages completed as prototype code, with separate feature commits. Sixteen API/algorithm/startup test groups and the production build pass. Routing and audio phrase logic are shared between runtime and tests. PWA packaging caches only public shell assets. `README.md` documents actual behavior and explicit simulations.
 
 Execution-environment limits prevented real HTTP serving, Chromium launch, native SDK builds and external API/device checks; these remain unverified rather than marked passed. The native target is a hosted-PWA Capacitor wrapper, with background sensor support deferred. A repeatable browser flow is supplied for a normal local environment.
 
@@ -43,3 +43,7 @@ Execution-environment limits prevented real HTTP serving, Chromium launch, nativ
 Live OSM mode is now the default online, with actual map tiles, GPS/manual/map-selected endpoints, Overpass-derived paths, fetch metadata and inspectable lighting/activity factors. Samples are explicit and are never returned after a live provider error. No tile downloads are automated in tests. The live-provider CLI was attempted but failed on external connectivity; that is not recorded as a pass.
 
 Tracking defaults to real hardware and reports browser capabilities before scanning. A Capacitor BluetoothLe native adapter handles permissions, RSSI advertisements, scan cancellation and listener cleanup; supported browser scanning shares the same lifecycle. Native and browser paths were tested against mocked interfaces, not a phone. Optional samples remain clearly separate.
+
+## Overpass retrieval follow-up
+
+Street-data failures now expose sanitized provider status/network diagnostics instead of one generic message. Transient failures try one alternate real public instance; rate limits, invalid requests and excessive payloads do not. Total retrieval time is bounded below the client deadline. The live CLI was rerun and reports DNS EAI_AGAIN in this execution sandbox. The user's server failure still needs its own diagnostic output; live connectivity is not marked fixed or verified.

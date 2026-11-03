@@ -1,4 +1,5 @@
 import { fail } from "./http.mjs";
+import { fetchStreetElements } from "./overpass.mjs";
 import {
   distance,
   lighting,
@@ -108,43 +109,12 @@ async function liveGraph(origin, destination) {
     .join(",");
   const hit = cache.get(bounds);
   if (hit && Date.now() - hit.time < 3600000) return hit.graph;
-  const q = `[out:json][timeout:15];(way[highway](${bounds});node[shop](${bounds});node[amenity~"cafe|restaurant|bus_station|library|hospital|pharmacy"](${bounds});node[public_transport=platform](${bounds}););out body;>;out skel qt;`;
-  let elements;
-  try {
-    const r = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "RESQ-X-prototype/0.1",
-      },
-      body: new URLSearchParams({ data: q }),
-      signal: AbortSignal.timeout(20000),
-    });
-    if (!r.ok) throw new Error();
-    let size = 0;
-    const chunks = [];
-    for await (const chunk of r.body) {
-      size += chunk.length;
-      if (size > 8000000) throw new Error();
-      chunks.push(Buffer.from(chunk));
-    }
-    const response = JSON.parse(Buffer.concat(chunks).toString());
-    if (
-      response.remark ||
-      !Array.isArray(response.elements) ||
-      response.elements.length > 25000
-    )
-      throw new Error();
-    elements = response.elements;
-  } catch {
-    fail(
-      503,
-      "Live map data is unavailable. Try again later or select the labeled offline demo.",
-    );
-  }
+  const q = `[out:json][timeout:10];(way[highway](${bounds});node[shop](${bounds});node[amenity~"cafe|restaurant|bus_station|library|hospital|pharmacy"](${bounds});node[public_transport=platform](${bounds}););out body;>;out skel qt;`;
+  const { elements, endpoint } = await fetchStreetElements(q);
   const graph = graphFromOSM(elements);
   graph.source = {
     provider: "OpenStreetMap / Overpass",
+    endpoint,
     fetchedAt: new Date().toISOString(),
   };
   if (!Object.keys(graph.nodes).length)
