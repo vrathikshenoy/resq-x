@@ -36,3 +36,14 @@ test('contact ownership, validation, verification and idempotent mock alerts',as
  assert.equal((await call('/api/v1/alerts/trigger',{...alert,request_id:'invalid-location',location:{latitude:95,longitude:0}},a.cookie)).status,422);
  await call(path+'/'+c.body.id,{name:'Ananya',phone:'+919876543211',relation:'Friend'},a.cookie,'PUT');assert.equal((await call(path,null,a.cookie)).body[0].verified,0);
 });
+test('route scoring, shortest vs weighted paths and disconnected streets',async()=>{
+ const {demoGraph,shortestPath,edgeCost,lighting,routeRequest,graphFromOSM}=await import('../backend/routing.mjs');
+ const graph=demoGraph(),short=shortestPath(graph,'0','15',false),weighted=shortestPath(graph,'0','15',true);
+ assert.ok(short.distance<=weighted.distance);assert.ok(weighted.cost<=short.cost);assert.equal(weighted.lit_percent,100);assert.notDeepEqual(short.coordinates,weighted.coordinates);
+ assert.equal(edgeCost({length:100,lit:'unknown',activity:0},true),375);assert.equal(lighting(undefined),'unknown');assert.equal(lighting('no'),'no');
+ assert.throws(()=>shortestPath({nodes:graph.nodes,edges:[]},'0','15',true),/No connected/);
+ await assert.rejects(()=>routeRequest({mode:'live',origin:[91,0],destination:[0,0]}),/valid latitude/);
+ await assert.rejects(()=>routeRequest({mode:'demo',origin:'0',destination:'0'}),/different/);
+ const network=graphFromOSM([{type:'node',id:1,lat:0,lon:0},{type:'node',id:2,lat:0,lon:.001},{type:'way',nodes:[1,2],tags:{highway:'footway','oneway:foot':'yes',lit:'yes'}},{type:'way',nodes:[1,2],tags:{highway:'motorway'}}]);assert.equal(network.edges.length,1);assert.equal(network.edges[0].lit,'yes');
+ const user=await call('/api/v1/auth/demo',{});const route=await call('/api/v1/navigation/route',{mode:'demo',origin:'0',destination:'15'},user.cookie);assert.equal(route.status,200);assert.match(route.body.attribution,/Fictional/);
+});
