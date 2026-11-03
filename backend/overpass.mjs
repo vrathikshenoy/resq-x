@@ -1,4 +1,5 @@
 import { fail } from "./http.mjs";
+import { OVERPASS_HTTP_TIMEOUT_MS } from "../shared/network.mjs";
 const publicEndpoints = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
@@ -25,7 +26,7 @@ function endpoints() {
 }
 function networkReason(error) {
   if (["AbortError", "TimeoutError"].includes(error.name))
-    return "request timed out";
+    return `request timed out after ${OVERPASS_HTTP_TIMEOUT_MS / 1000}s`;
   const code = error.cause?.code || error.cause?.errors?.[0]?.code;
   if (["ENOTFOUND", "EAI_AGAIN"].includes(code))
     return `server DNS lookup failed (${code})`;
@@ -45,7 +46,7 @@ export async function fetchStreetElements(query) {
           "User-Agent": "RESQ-X-prototype/0.1",
         },
         body: new URLSearchParams({ data: query }),
-        signal: AbortSignal.timeout(12000),
+        signal: AbortSignal.timeout(OVERPASS_HTTP_TIMEOUT_MS),
       });
       if (response.status === 429) {
         await response.body?.cancel();

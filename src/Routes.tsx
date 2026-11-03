@@ -225,10 +225,17 @@ export function Routes() {
               </>
             )}
             <button className="button primary full" disabled={busy}>
-              {busy ? "Comparing routes…" : "Compare walking routes"}
+              {busy ? "Loading OSM streets…" : "Compare walking routes"}
               <ArrowRight size={16} />
             </button>
           </form>
+          {busy && mode === "live" && (
+            <p className="small-text" role="status">
+              Public OSM servers may queue the first request. Trying up to two
+              providers; this can take up to 90 seconds. Successful data is
+              cached for later comparisons.
+            </p>
+          )}
           {error && (
             <p className="error" role="alert" style={{ marginTop: 15 }}>
               {error}

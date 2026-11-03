@@ -427,6 +427,9 @@ test("live routing uses OSM street tags, caches requests and never substitutes a
       requests++;
       assert.equal(url, "https://overpass-api.de/api/interpreter");
       assert.match(options.body.get("data"), /way\[highway\]/);
+      assert.match(options.body.get("data"), /node\(w\.roads\)/);
+      assert.match(options.body.get("data"), /highway!~/);
+      assert.ok(!options.body.get("data").includes(";>;"));
       return new Response(JSON.stringify({ elements }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -566,5 +569,30 @@ test("Overpass retries server outages, identifies DNS failure and respects rate 
     globalThis.fetch = previousFetch;
     if (previousURL === undefined) delete process.env.OVERPASS_URL;
     else process.env.OVERPASS_URL = previousURL;
+  }
+});
+
+test("routing deadlines allow the Overpass queue and both backend attempts", async () => {
+  const { OVERPASS_QUERY_SECONDS, OVERPASS_HTTP_TIMEOUT_MS, ROUTE_TIMEOUT_MS } =
+    await import("../shared/network.mjs");
+  assert.ok(
+    OVERPASS_HTTP_TIMEOUT_MS >= (15 + OVERPASS_QUERY_SECONDS) * 1000 + 5000,
+    "HTTP must allow queue, query and transfer time",
+  );
+  assert.ok(
+    ROUTE_TIMEOUT_MS >= OVERPASS_HTTP_TIMEOUT_MS * 2 + 5000,
+    "browser must outlive both attempts and response processing",
+  );
+  const { fetchStreetElements } = await import("../backend/overpass.mjs");
+  const previous = globalThis.fetch;
+  try {
+    globalThis.fetch = async (_url, options) => {
+      assert.ok(options.signal instanceof AbortSignal);
+      assert.equal(options.signal.aborted, false);
+      return new Response(JSON.stringify({ elements: [] }));
+    };
+    await fetchStreetElements("query");
+  } finally {
+    globalThis.fetch = previous;
   }
 });

@@ -1,3 +1,4 @@
+import { ROUTE_TIMEOUT_MS } from "../shared/network.mjs";
 export async function api<T = any>(
   path: string,
   data?: unknown,
@@ -8,7 +9,9 @@ export async function api<T = any>(
     credentials: "same-origin",
     headers: data ? { "Content-Type": "application/json" } : undefined,
     body: data ? JSON.stringify(data) : undefined,
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(
+      path === "/navigation/route" ? ROUTE_TIMEOUT_MS : 30000,
+    ),
   });
   const result = await response.json();
   if (!response.ok)

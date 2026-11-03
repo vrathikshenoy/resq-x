@@ -1,5 +1,6 @@
 import { fail } from "./http.mjs";
 import { fetchStreetElements } from "./overpass.mjs";
+import { OVERPASS_QUERY_SECONDS } from "../shared/network.mjs";
 import {
   distance,
   lighting,
@@ -109,7 +110,11 @@ async function liveGraph(origin, destination) {
     .join(",");
   const hit = cache.get(bounds);
   if (hit && Date.now() - hit.time < 3600000) return hit.graph;
-  const q = `[out:json][timeout:10];(way[highway](${bounds});node[shop](${bounds});node[amenity~"cafe|restaurant|bus_station|library|hospital|pharmacy"](${bounds});node[public_transport=platform](${bounds}););out body;>;out skel qt;`;
+  const q = `[out:json][timeout:${OVERPASS_QUERY_SECONDS}][maxsize:33554432];
+way[highway][highway!~"^(motorway|motorway_link|trunk|trunk_link|construction|proposed)$"](${bounds})->.roads;
+.roads out body;node(w.roads);out skel qt;
+(node[shop](${bounds});node[amenity~"^(cafe|restaurant|bus_station|library|hospital|pharmacy)$"](${bounds});node[public_transport=platform](${bounds}););out body;`;
+
   const { elements, endpoint } = await fetchStreetElements(q);
   const graph = graphFromOSM(elements);
   graph.source = {

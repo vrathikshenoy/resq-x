@@ -34,7 +34,7 @@ Run Python unittest tests for authentication, isolation, contact input, idempote
 
 ## Final outcome
 
-All seven implementation stages completed as prototype code, with separate feature commits. Sixteen API/algorithm/startup test groups and the production build pass. Routing and audio phrase logic are shared between runtime and tests. PWA packaging caches only public shell assets. `README.md` documents actual behavior and explicit simulations.
+All seven implementation stages completed as prototype code, with separate feature commits. Seventeen API/algorithm/startup test groups and the production build pass. Routing and audio phrase logic are shared between runtime and tests. PWA packaging caches only public shell assets. `README.md` documents actual behavior and explicit simulations.
 
 Execution-environment limits prevented real HTTP serving, Chromium launch, native SDK builds and external API/device checks; these remain unverified rather than marked passed. The native target is a hosted-PWA Capacitor wrapper, with background sensor support deferred. A repeatable browser flow is supplied for a normal local environment.
 
@@ -47,3 +47,7 @@ Tracking defaults to real hardware and reports browser capabilities before scann
 ## Overpass retrieval follow-up
 
 Street-data failures now expose sanitized provider status/network diagnostics instead of one generic message. Transient failures try one alternate real public instance; rate limits, invalid requests and excessive payloads do not. Total retrieval time is bounded below the client deadline. The live CLI was rerun and reports DNS EAI_AGAIN in this execution sandbox. The user's server failure still needs its own diagnostic output; live connectivity is not marked fixed or verified.
+
+## Public-service queue timing correction
+
+The user's diagnostic showed HTTP 502 from the first provider and timeout from the second. The original 12-second HTTP budget was shorter than Overpass's documented queue allowance. Shared constants now give each provider 45 seconds (25-second query, up to 15-second queue, transfer margin), with 100 seconds for browser routing requests. Other API calls retain 30 seconds. Street queries exclude unsupported highways and retrieve node references from the road set only. Tests enforce the cross-layer timing invariant; provider availability remains externally dependent.

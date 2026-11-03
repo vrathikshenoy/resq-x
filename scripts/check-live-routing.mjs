@@ -5,6 +5,9 @@ if (values.length !== 0 && values.length !== 4)
     "Usage: npm run test:live -- originLat originLon destinationLat destinationLon",
   );
 const [a, b, c, d] = values.length ? values : [12.975, 77.59, 12.9705, 77.5948];
+console.log(
+  "Requesting live OSM street data. Public services may queue requests; allow up to 90 seconds for both providers.",
+);
 try {
   const r = await routeRequest({
     mode: "live",
