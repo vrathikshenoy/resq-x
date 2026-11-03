@@ -47,3 +47,12 @@ test('route scoring, shortest vs weighted paths and disconnected streets',async(
  const network=graphFromOSM([{type:'node',id:1,lat:0,lon:0},{type:'node',id:2,lat:0,lon:.001},{type:'way',nodes:[1,2],tags:{highway:'footway','oneway:foot':'yes',lit:'yes'}},{type:'way',nodes:[1,2],tags:{highway:'motorway'}}]);assert.equal(network.edges.length,1);assert.equal(network.edges[0].lit,'yes');
  const user=await call('/api/v1/auth/demo',{});const route=await call('/api/v1/navigation/route',{mode:'demo',origin:'0',destination:'15'},user.cookie);assert.equal(route.status,200);assert.match(route.body.attribution,/Fictional/);
 });
+test('photo simulation enforces per-channel bounds, preserves alpha and validates formats',async()=>{
+ const {perturbPixels,validateImageHeader}=await import('../src/lib/photo.mjs');
+ const original=new Uint8ClampedArray([0,255,128,77,250,5,100,255]);const result=perturbPixels(original,8,()=>.99);
+ assert.equal(original[2],128);assert.equal(result.pixels[3],77);assert.equal(result.pixels[7],255);assert.ok(result.maxDelta<=8);assert.ok(result.psnr>20);assert.equal(result.pixels[1],255);
+ const low=perturbPixels(original,8,()=>0);assert.equal(low.pixels[0],0);assert.ok(low.maxDelta<=8);
+ assert.throws(()=>perturbPixels(original,9),/budget/);assert.throws(()=>validateImageHeader(new Uint8Array([1,2,3]),'image/png',3),/valid JPEG/);
+ assert.throws(()=>validateImageHeader(new Uint8Array(12),'image/png',11*1024*1024),/10 MB/);
+ validateImageHeader(new Uint8Array([137,80,78,71,13,10,26,10]),'image/png',100);
+});
