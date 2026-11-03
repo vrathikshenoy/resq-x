@@ -345,3 +345,34 @@ test("JSON object boundary, duplicate contacts and API methods", async () => {
   );
   assert.equal((await call("/api/v1/missing", null, user.cookie)).status, 404);
 });
+
+test("Vite proxy preserves browser host for authenticated POST requests", async () => {
+  const { loadConfigFromFile } = await import("vite");
+  const loaded = await loadConfigFromFile({
+    command: "serve",
+    mode: "development",
+  });
+  for (const path of ["/api", "/health"])
+    assert.equal(loaded.config.server.proxy[path].changeOrigin, false);
+  for (const host of [
+    "localhost:5173",
+    "127.0.0.1:5173",
+    "192.168.1.44:5173",
+  ]) {
+    const response = await call("/api/v1/auth/demo", {}, null, "POST", {
+      host,
+      origin: `http://${host}`,
+    });
+    assert.equal(response.status, 201);
+    assert.ok(response.cookie);
+  }
+  assert.equal(
+    (
+      await call("/api/v1/auth/demo", {}, null, "POST", {
+        host: "localhost:5173",
+        origin: "https://untrusted.example",
+      })
+    ).status,
+    403,
+  );
+});
