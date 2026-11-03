@@ -24,6 +24,7 @@ import { Routes } from "./Routes";
 import { Photos } from "./Photos";
 import { Tracking } from "./Tracking";
 import { Audio } from "./Audio";
+import { Screen } from "./Screen";
 export const modules = [
   {
     id: "routes",
@@ -199,7 +200,7 @@ export function App() {
               need a connection to your server.
             </div>
           )}
-          {page === "home" ? (
+          <Screen visible={page === "home"}>
             <>
               <div className="page-heading">
                 <div>
@@ -361,26 +362,30 @@ export function App() {
                 </aside>
               </div>
             </>
-          ) : page === "audio" ? (
+          </Screen>
+          <Screen visible={page === "audio"}>
             <>
               <PageTitle
                 title="Help starts with a few words."
                 subtitle="Explore foreground listening and practice a hands-free alert."
               />
               <Audio
+                visible={page === "audio"}
                 ready={contacts.some((c) => !!c.verified)}
                 onTrigger={startSOS}
               />
             </>
-          ) : page === "tracking" ? (
+          </Screen>
+          <Screen visible={page === "tracking"}>
             <>
               <PageTitle
                 title="Notice what stays nearby."
                 subtitle="Look for patterns in Bluetooth observations, without jumping to conclusions."
               />
-              <Tracking userId={user.id} />
+              <Tracking userId={user.id} visible={page === "tracking"} />
             </>
-          ) : page === "photos" ? (
+          </Screen>
+          <Screen visible={page === "photos"}>
             <>
               <PageTitle
                 title="A privacy check before you share."
@@ -388,15 +393,17 @@ export function App() {
               />
               <Photos />
             </>
-          ) : page === "routes" ? (
+          </Screen>
+          <Screen visible={page === "routes"}>
             <>
               <PageTitle
                 title="A more considered way home."
                 subtitle="Compare walking routes with a little more context about the streets."
               />
-              <Routes />
+              <Routes visible={page === "routes"} />
             </>
-          ) : page === "contacts" ? (
+          </Screen>
+          <Screen visible={page === "contacts"}>
             <>
               <PageTitle
                 title="Your trusted circle"
@@ -409,7 +416,8 @@ export function App() {
                 onSOS={() => startSOS()}
               />
             </>
-          ) : page === "settings" ? (
+          </Screen>
+          <Screen visible={page === "settings"}>
             <>
               <PageTitle
                 title="Your space, your settings"
@@ -474,21 +482,7 @@ export function App() {
                 </button>
               </section>
             </>
-          ) : (
-            <section className="card">
-              <h2>Choose your next step.</h2>
-              <p>
-                Open your overview to find all four tools and your trusted
-                circle.
-              </p>
-              <button
-                className="button primary"
-                onClick={() => navigate("home")}
-              >
-                Back to overview
-              </button>
-            </section>
-          )}
+          </Screen>
           <footer>
             <span>
               <ShieldCheck size={14} /> RESQ-X

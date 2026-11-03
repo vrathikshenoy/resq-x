@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Point, RouteResult } from "../shared/routing.mjs";
 import { fitMap, project, unproject } from "./lib/map.mjs";
 export function OSMMap({
+  visible,
   origin,
   destination,
   result,
@@ -9,6 +10,7 @@ export function OSMMap({
   picking,
   onPick,
 }: {
+  visible: boolean;
   origin: Point | null;
   destination: Point | null;
   result: RouteResult | null;
@@ -23,9 +25,10 @@ export function OSMMap({
     [pan, setPan] = useState<Point>([0, 0]),
     [tileError, setTileError] = useState(false);
   useEffect(() => {
-    const observer = new ResizeObserver(([e]) =>
-      setSize({ width: e.contentRect.width, height: e.contentRect.height }),
-    );
+    const observer = new ResizeObserver(([e]) => {
+      if (e.contentRect.width > 0 && e.contentRect.height > 0)
+        setSize({ width: e.contentRect.width, height: e.contentRect.height });
+    });
     if (root.current) observer.observe(root.current);
     return () => observer.disconnect();
   }, []);
@@ -58,7 +61,7 @@ export function OSMMap({
   const tiles = [];
   for (
     let x = Math.floor(left / 256);
-    x <= Math.floor((left + size.width) / 256);
+    visible && x <= Math.floor((left + size.width) / 256);
     x++
   )
     for (

@@ -12,12 +12,13 @@
     "dev:api": "node --watch backend/server.mjs",
     "build": "tsc --noEmit && vite build && node scripts/build-sw.mjs",
     "start": "node --env-file-if-exists=.env backend/server.mjs",
-    "test": "node tests/api.test.mjs && node tests/startup.test.mjs && node tests/ble.test.mjs",
+    "test": "node tests/api.test.mjs && node tests/startup.test.mjs && node tests/ble.test.mjs && node scripts/test-ui.mjs",
     "test:e2e": "node tests/browser.mjs",
     "native:sync": "npm run build && npx --no-install cap sync",
     "native:android": "npx --no-install cap open android",
     "native:ios": "npx --no-install cap open ios",
-    "test:live": "node scripts/check-live-routing.mjs"
+    "test:live": "node scripts/check-live-routing.mjs",
+    "test:ui": "node scripts/test-ui.mjs"
   },
   "dependencies": {
     "react": "19.1.0",
@@ -29,6 +30,7 @@
     "@types/react-dom": "19.1.2",
     "vite": "7.0.5",
     "typescript": "5.8.3",
-    "playwright": "1.62.1"
+    "playwright": "1.62.1",
+    "jsdom": "24.1.3"
   }
 }

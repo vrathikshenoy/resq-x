@@ -2130,3 +2130,6 @@ th {
 .map-point-button {
   margin: 0 0 17px 12px;
 }
+[hidden] {
+  display: none !important;
+}

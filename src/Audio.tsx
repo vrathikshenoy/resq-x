@@ -31,9 +31,11 @@ import { matchesPhrase } from "../public/audio-core.mjs";
 export function Audio({
   onTrigger,
   ready,
+  visible,
 }: {
   onTrigger: (t: Trigger) => void;
   ready: boolean;
+  visible: boolean;
 }) {
   const [listening, setListening] = useState(false),
     [starting, setStarting] = useState(false),
@@ -54,7 +56,12 @@ export function Audio({
   function stop() {
     run.current++;
     running.current = false;
-    recognition.current?.stop();
+    if (recognition.current) {
+      recognition.current.onresult = null;
+      recognition.current.onerror = null;
+      recognition.current.onend = null;
+      recognition.current.stop();
+    }
     recognition.current = null;
     stream.current?.getTracks().forEach((t) => t.stop());
     stream.current = null;
@@ -80,6 +87,9 @@ export function Audio({
       document.removeEventListener("visibilitychange", hidden);
     };
   }, []);
+  useEffect(() => {
+    if (!visible) stop();
+  }, [visible]);
   function trigger(type: Trigger, source: string) {
     if (Date.now() < cooldown.current) return;
     if (!ready) {

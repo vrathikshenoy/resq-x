@@ -34,7 +34,7 @@ Run Python unittest tests for authentication, isolation, contact input, idempote
 
 ## Final outcome
 
-All seven implementation stages completed as prototype code, with separate feature commits. Seventeen API/algorithm/startup test groups and the production build pass. Routing and audio phrase logic are shared between runtime and tests. PWA packaging caches only public shell assets. `README.md` documents actual behavior and explicit simulations.
+All seven implementation stages completed as prototype code, with separate feature commits. Eighteen API/algorithm/startup/UI test groups and the production build pass. Routing and audio phrase logic are shared between runtime and tests. PWA packaging caches only public shell assets. `README.md` documents actual behavior and explicit simulations.
 
 Execution-environment limits prevented real HTTP serving, Chromium launch, native SDK builds and external API/device checks; these remain unverified rather than marked passed. The native target is a hosted-PWA Capacitor wrapper, with background sensor support deferred. A repeatable browser flow is supplied for a normal local environment.
 
@@ -51,3 +51,7 @@ Street-data failures now expose sanitized provider status/network diagnostics in
 ## Public-service queue timing correction
 
 The user's diagnostic showed HTTP 502 from the first provider and timeout from the second. The original 12-second HTTP budget was shorter than Overpass's documented queue allowance. Shared constants now give each provider 45 seconds (25-second query, up to 15-second queue, transfer margin), with 100 seconds for browser routing requests. Other API calls retain 30 seconds. Street queries exclude unsupported highways and retrieve node references from the road set only. Tests enforce the cross-layer timing invariant; provider availability remains externally dependent.
+
+## Section state retention
+
+Replaced conditional screen unmounting with lazy, retained screens. User work persists within the current session across section changes, while explicit visibility effects stop audio and Bluetooth operations. Hidden maps retain viewport state without requesting tiles or accepting zero-sized hidden layout measurements. Sign-out still unmounts all sections and clears transient data/object URLs. A jsdom test exercises actual React navigation, route results, contact drafts, photo selection/output, scan history, audio settings, sensor stop and logout cleanup. Reload persistence is deliberately unchanged.

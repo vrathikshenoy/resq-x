@@ -17,7 +17,7 @@ import {
   type RouteResult as Result,
   type Point,
 } from "../shared/routing.mjs";
-export function Routes() {
+export function Routes({ visible }: { visible: boolean }) {
   const [mode, setMode] = useState(navigator.onLine ? "live" : "demo"),
     [origin, setOrigin] = useState("0"),
     [destination, setDestination] = useState("15"),
@@ -250,6 +250,7 @@ export function Routes() {
         <section className="map-panel">
           {mode === "live" ? (
             <OSMMap
+              visible={visible}
               origin={readPoint(from)}
               destination={readPoint(to)}
               result={result?.mode === "live" ? result : null}

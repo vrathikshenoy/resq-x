@@ -21,7 +21,13 @@ import {
   type CapacitorBLE,
   type BrowserBLE,
 } from "./lib/ble.mjs";
-export function Tracking({ userId }: { userId: string }) {
+export function Tracking({
+  userId,
+  visible,
+}: {
+  userId: string;
+  visible: boolean;
+}) {
   const key = "resqx-tracking-" + userId;
   const [mode, setMode] = useState("live"),
     [devices, setDevices] = useState<Device[]>([]),
@@ -64,16 +70,25 @@ export function Tracking({ userId }: { userId: string }) {
       if (document.hidden) stop();
     };
     document.addEventListener("visibilitychange", hide);
-    const id = setInterval(() => setTick(Date.now()), 5000);
+
     return () => {
       active.current = false;
       run.current++;
       scanController.current?.abort();
       cleanup.current?.();
-      clearInterval(id);
+
       document.removeEventListener("visibilitychange", hide);
     };
   }, []);
+  useEffect(() => {
+    if (!visible) {
+      stop();
+      return;
+    }
+    setTick(Date.now());
+    const id = setInterval(() => setTick(Date.now()), 5000);
+    return () => clearInterval(id);
+  }, [visible]);
   function trust(id: string) {
     const next = trusted.includes(id)
       ? trusted.filter((t) => t !== id)
@@ -495,7 +510,8 @@ export function Tracking({ userId }: { userId: string }) {
               </p>
               <p className="small-text">
                 Devices you trust stay on your local trust list for this
-                account. Scan history clears when you leave this screen.
+                account. Scan history stays available while you switch sections.
+                Clear it here or sign out to discard it.
               </p>
             </section>
           )}
