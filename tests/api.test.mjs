@@ -307,7 +307,7 @@ test("tracking requires separate sessions and movement; trusted devices suppress
   assert.equal(devices[0].observations.length, 30);
 });
 test("audio circular buffer is bounded and phrase matching uses confidence and whole words", async () => {
-  const { AudioWindow, matchesPhrase } =
+  const { AudioWindow, matchesPhrase, ScreamGate } =
     await import("../src/lib/audio-core.mjs");
   const audio = new AudioWindow(8000);
   assert.equal(audio.buffer.length, 12000);
@@ -321,6 +321,15 @@ test("audio circular buffer is bounded and phrase matching uses confidence and w
   assert.equal(matchesPhrase("Hey ResQ helpful", "Hey ResQ help", 0.9), false);
   assert.equal(matchesPhrase("Hey ResQ help", "Hey ResQ help", 0.3), false);
   assert.equal(matchesPhrase("hey rescue help", "Hey ResQ help", 0.9), true);
+  const ring = new AudioWindow(8000, 0.001);
+  ring.push(new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]));
+  // 8-sample ring after 10 pushes: oldest kept is 3, newest is 10.
+  assert.deepEqual([...ring.snapshot()], [3, 4, 5, 6, 7, 8, 9, 10]);
+  const gate = new ScreamGate();
+  assert.equal(gate.push(0.9), false, "one loud window is not enough");
+  assert.equal(gate.push(0.1), false);
+  assert.equal(gate.push(0.6), true, "two of the last three windows");
+  assert.equal(gate.push(0.2), false, "the first hit has aged out");
 });
 test("JSON object boundary, duplicate contacts and API methods", async () => {
   assert.equal((await call("/api/v1/auth/demo", [])).status, 422);

@@ -32,7 +32,16 @@ type RecognitionConstructor = {
   }) => Promise<boolean>;
 };
 import type { Model } from "vosk-browser";
-import { matchesPhrase, normalizePhrase } from "./lib/audio-core.mjs";
+import type { AudioClassifier } from "@mediapipe/tasks-audio";
+import {
+  AudioWindow,
+  ScreamGate,
+  matchesPhrase,
+  normalizePhrase,
+} from "./lib/audio-core.mjs";
+// MediaPipe's WASM runtime, emitted by Vite as same-origin hashed assets (no CDN).
+import mediapipeLoader from "@mediapipe/tasks-audio/audio_wasm_internal.js?url";
+import mediapipeWasm from "@mediapipe/tasks-audio/audio_wasm_internal.wasm?url";
 // Vite bundles the worklet with its audio-core import and returns the hashed asset URL.
 import workletUrl from "./lib/audio-worklet.js?worker&url";
 // Free offline fallback model, served from this app's origin (npm run voice:model). Override to self-host elsewhere.
@@ -40,6 +49,13 @@ const VOSK_MODEL_URL =
   import.meta.env.VITE_VOSK_MODEL_URL ||
   "/models/vosk-model-small-en-us-0.15.tar.gz";
 const VOICE_IDLE = ["Off", "Unavailable", "Stopped"];
+// Free YAMNet sound classifier (Apache-2.0), served from this app's origin (npm run voice:model).
+const YAMNET_MODEL_URL = "/models/yamnet.tflite";
+// Missing files fall back to index.html, so check before loading a model.
+async function modelMissing(url: string) {
+  const head = await fetch(url, { method: "HEAD" }).catch(() => null);
+  return !!head && (!head.ok || !!head.headers.get("content-type")?.includes("html"));
+}
 export function Audio({
   onTrigger,
   ready,
@@ -55,6 +71,7 @@ export function Audio({
     [error, setError] = useState(""),
     [phrase, setPhrase] = useState("Hey ResQ help"),
     [voiceStatus, setVoiceStatus] = useState("Off"),
+    [screamStatus, setScreamStatus] = useState("Off"),
     [lastEvent, setLastEvent] = useState("No triggers this visit."),
     [cooling, setCooling] = useState(false);
   const stream = useRef<MediaStream | null>(null),
@@ -62,7 +79,9 @@ export function Audio({
     recognition = useRef<Recognition | null>(null),
     meterNode = useRef<AudioWorkletNode | null>(null),
     vosk = useRef<Model | null>(null),
-    onSamples = useRef<((samples: Float32Array) => void) | null>(null),
+    phraseSink = useRef<((samples: Float32Array) => void) | null>(null),
+    screamSink = useRef<((samples: Float32Array) => void) | null>(null),
+    screamClassifier = useRef<AudioClassifier | null>(null),
     running = useRef(false),
     active = useRef(true),
     run = useRef(0),
@@ -78,7 +97,10 @@ export function Audio({
       recognition.current.stop();
     }
     recognition.current = null;
-    onSamples.current = null;
+    phraseSink.current = null;
+    screamSink.current = null;
+    screamClassifier.current?.close();
+    screamClassifier.current = null;
     vosk.current?.terminate();
     vosk.current = null;
     meterNode.current = null;
@@ -91,6 +113,7 @@ export function Audio({
       setStarting(false);
       setLevel(0);
       setVoiceStatus("Off");
+      setScreamStatus("Off");
     }
   }
   useEffect(() => {
@@ -163,7 +186,10 @@ export function Audio({
       meterNode.current = meter;
       meter.port.onmessage = (e) => {
         if (!active.current || !running.current) return;
-        if (e.data.samples) onSamples.current?.(e.data.samples);
+        if (e.data.samples) {
+          phraseSink.current?.(e.data.samples);
+          screamSink.current?.(e.data.samples);
+        }
         else setLevel(Math.min(1, Math.sqrt(e.data.level) * 2));
       };
       await audio.resume();
@@ -225,7 +251,13 @@ export function Audio({
       if (status === "downloadable" || status === "downloading") {
         if (!Ctor.install || run.current !== current) return false;
         setVoiceStatus("Installing Chrome’s on-device speech pack…");
-        if (!(await Ctor.install(options))) return false;
+        // install() can stay pending on slow or blocked downloads; fall back to Vosk after 20 s.
+        // Chrome keeps downloading in the background for a later session.
+        const installed = await Promise.race([
+          Ctor.install(options).catch(() => false),
+          new Promise<false>((r) => setTimeout(() => r(false), 20000)),
+        ]);
+        if (!installed) return false;
       } else if (status !== "available") return false;
       if (!running.current || run.current !== current) return true;
       r.processLocally = true;
@@ -277,16 +309,13 @@ export function Audio({
       if (run.current !== current) return;
       vosk.current?.terminate();
       vosk.current = null;
-      onSamples.current = null;
+      phraseSink.current = null;
       setVoiceStatus("Unavailable");
       setError(message);
     };
     setVoiceStatus("Loading offline voice model…");
-    // Missing files fall back to index.html; offline, rely on the copy Vosk keeps in IndexedDB.
-    const head = await fetch(VOSK_MODEL_URL, { method: "HEAD" }).catch(
-      () => null,
-    );
-    if (head && (!head.ok || head.headers.get("content-type")?.includes("html")))
+    // Offline, the HEAD fails and Vosk uses the copy it keeps in IndexedDB.
+    if (await modelMissing(VOSK_MODEL_URL))
       return unavailable(
         "The offline voice model is not installed on this server. Run npm run voice:model, then rebuild. Use the phrase simulation meanwhile.",
       );
@@ -321,7 +350,7 @@ export function Audio({
       recognizer.on("error", () =>
         unavailable("Offline phrase recognition stopped unexpectedly."),
       );
-      onSamples.current = (s) => recognizer.acceptWaveformFloat(s, sampleRate);
+      phraseSink.current = (s) => recognizer.acceptWaveformFloat(s, sampleRate);
       meterNode.current?.port.postMessage({ forward: true });
       setVoiceStatus("Offline (Vosk) · experimental");
     } catch {
@@ -330,13 +359,72 @@ export function Audio({
       );
     }
   }
+  // YAMNet classifies the last second of audio every half second; ScreamGate needs a sustained scream.
+  async function enableScream() {
+    setError("");
+    const current = run.current,
+      sampleRate = context.current?.sampleRate;
+    if (!sampleRate) return;
+    const unavailable = (message: string) => {
+      if (run.current !== current) return;
+      screamSink.current = null;
+      screamClassifier.current?.close();
+      screamClassifier.current = null;
+      setScreamStatus("Unavailable");
+      setError(message);
+    };
+    setScreamStatus("Loading scream model…");
+    if (await modelMissing(YAMNET_MODEL_URL))
+      return unavailable(
+        "The scream model is not installed on this server. Run npm run voice:model, then rebuild.",
+      );
+    try {
+      const { AudioClassifier } = await import("@mediapipe/tasks-audio");
+      const classifier = await AudioClassifier.createFromOptions(
+        { wasmLoaderPath: mediapipeLoader, wasmBinaryPath: mediapipeWasm },
+        {
+          baseOptions: { modelAssetPath: YAMNET_MODEL_URL },
+          categoryAllowlist: ["Screaming"],
+          scoreThreshold: 0,
+          maxResults: 1,
+        },
+      );
+      if (!running.current || run.current !== current) {
+        classifier.close();
+        return;
+      }
+      screamClassifier.current = classifier;
+      const recent = new AudioWindow(sampleRate, 1),
+        gate = new ScreamGate();
+      let pending = 0;
+      screamSink.current = (samples) => {
+        recent.push(samples);
+        pending += samples.length;
+        if (pending < sampleRate / 2) return;
+        pending = 0;
+        const score = Math.max(
+          0,
+          ...classifier
+            .classify(recent.snapshot(), sampleRate)
+            .flatMap((r) => r.classifications[0]?.categories ?? [])
+            .map((c) => c.score),
+        );
+        if (gate.push(score))
+          trigger("scream", `Scream detected (score ${score.toFixed(2)})`);
+      };
+      meterNode.current?.port.postMessage({ forward: true });
+      setScreamStatus("On-device (YAMNet) · experimental");
+    } catch {
+      unavailable("Scream detection could not start in this browser.");
+    }
+  }
   return (
     <div className="stack">
       <div className="notice warning">
         <strong>Foreground prototype.</strong> Listening stops when this app is
         hidden or this screen closes. Locked-screen or background operation is
-        unavailable. Scream detection is simulated; microphone volume never
-        triggers SOS.
+        unavailable. Volume alone never triggers SOS; only a recognized phrase
+        or a sustained scream does.
       </div>
       <div className="feature-grid">
         <section className="card audio-workspace">
@@ -450,6 +538,29 @@ export function Audio({
               once). Audio never leaves this device. Use everyday English
               words; “ResQ” is heard as “rescue”. The experimental confidence
               threshold is 0.75; it has not been calibrated across speakers.
+            </p>
+          </div>
+          <div className="voice-controls">
+            <h3>On-device scream detection</h3>
+            <div className="row wrap">
+              <button
+                className="button secondary"
+                disabled={!listening || !VOICE_IDLE.includes(screamStatus)}
+                onClick={enableScream}
+              >
+                <Volume2 size={16} />
+                Enable scream detection
+              </button>
+              <span className="small-text muted" role="status">
+                {screamStatus}
+              </span>
+            </div>
+            <p className="small-text">
+              Google's free YAMNet sound model (about 4 MB, downloaded once)
+              checks the last second of audio twice a second. An SOS starts
+              only when “Screaming” scores 0.5 or more in 2 of the last 3
+              checks. Thresholds are uncalibrated; shouting, singing or TV
+              audio may trigger it, and you can cancel during the countdown.
             </p>
           </div>
         </section>

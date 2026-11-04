@@ -22,6 +22,25 @@ export class AudioWindow {
     this.buffer.fill(0);
     this.position = 0;
   }
+  // Oldest-to-newest copy of the ring buffer.
+  snapshot() {
+    const out = new Float32Array(this.buffer.length);
+    out.set(this.buffer.subarray(this.position));
+    out.set(this.buffer.subarray(0, this.position), this.buffer.length - this.position);
+    return out;
+  }
+}
+// Fires only on a sustained scream: `needed` of the last `size` classifications at or above `threshold`.
+// ponytail: thresholds are uncalibrated starting values; tune them with real recordings.
+export class ScreamGate {
+  constructor(threshold = 0.5, needed = 2, size = 3) {
+    Object.assign(this, { threshold, needed, size, recent: [] });
+  }
+  push(score) {
+    this.recent.push(score >= this.threshold);
+    if (this.recent.length > this.size) this.recent.shift();
+    return this.recent.filter(Boolean).length >= this.needed;
+  }
 }
 // Recognizers transcribe the spoken brand name "ResQ" as the dictionary word "rescue".
 export const normalizePhrase = (s) =>

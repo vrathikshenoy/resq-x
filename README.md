@@ -11,7 +11,7 @@ Requires Node **22.13+** (Node 24 LTS recommended) and npm. No backend packages,
 ```sh
 cd "/mnt/ssd/New Folder/resq-x"
 npm install
-npm run voice:model   # optional: free offline wake-phrase model (~41 MB) into public/models/
+npm run voice:model   # optional: free on-device audio models (Vosk ~41 MB, YAMNet ~4 MB) into public/models/
 npm run dev
 ```
 
@@ -38,7 +38,7 @@ Dependencies already present on this machine were reused for the build because p
 | RouteShield      | Live OSM tiles, GPS/map-picked endpoints, Overpass street graphs, Dijkstra shortest/weighted paths, inspectable street tags and fetch timestamp     | Offline graph is fictional. Live OSM depends on network and incomplete tags; weights do not establish safety                               |
 | DeepCloak        | Local image validation, orientation-aware browser decoding, preview, bounded ±8 channel changes, metadata-free PNG export, measured PSNR            | Random perturbation simulation; no face detection/model, PGD/EOT, embeddings or measured model protection                                  |
 | TrackShield      | Native foreground BluetoothLe plugin adapter and supported-browser advertisement scans, signal history, local trust list and RSSI calibration       | Three-second demo scans always available. Repeated detection rule uses self-reported movement; no directional radar or stalking conclusion |
-| Audio Trigger    | Explicit microphone permission, AudioWorklet volume meter, 1.5-second RAM buffer, wake phrase via Chrome's on-device recognizer or free offline Vosk | Phrase accuracy uncalibrated. No trained scream model. Phrase/scream simulations work without a mic. No cloud speech service is ever used    |
+| Audio Trigger    | Explicit microphone permission, AudioWorklet meter, wake phrase (Chrome on-device or free offline Vosk), scream detection (free on-device YAMNet)    | Phrase and scream thresholds uncalibrated. Simulations work without a mic. No audio ever leaves the device                                   |
 | PWA              | Standalone manifest, maskable icons, versioned offline app shell, responsive safe-area navigation                                                   | Visit once online. Photos, route demos and BLE demos work offline; contacts and alerts require the server                                  |
 | Native packaging | Capacitor config and Android/iOS setup instructions                                                                                                 | Native BLE adapter requires installing the documented plugin and rebuilding; no native binary or background sensor implementation          |
 
@@ -50,7 +50,7 @@ Dependencies already present on this machine were reused for the build because p
 4. Open **RouteShield**. **Live OSM data** is the default online. Use **Use my location** or **Set start on map**, then **Set destination on map** (or enter coordinates). Choose **Compare walking routes** for locations within 3 km. Inspect shortest/weighted alternatives, lighting tags and the real-data timestamp. **Offline demo** is an explicit sample mode; live failure never returns fabricated data.
 5. Open **DeepCloak**, choose a file or sample illustration, confirm permission, and run the simulation. Compare and download the result. Metrics refer to pixel changes against the resized input, not face-model effectiveness.
 6. Open **TrackShield**. Real scanning is the default. A native build with the BluetoothLe plugin, or a browser exposing BLE advertisement scanning, requests permission when you press **Start foreground scan**. Unsupported browsers show the limitation and no devices. To rehearse without hardware, select **Optional sample** explicitly; repeat three scans with movement marked twice.
-7. Open **Audio Trigger** and rehearse a phrase/scream trigger. A real microphone is optional. To try the real wake phrase, choose **Enable foreground microphone**, then **Enable local phrase recognition**, and say the phrase. See [Audio Trigger: how it works](#audio-trigger-how-it-works).
+7. Open **Audio Trigger** and rehearse a phrase/scream trigger. A real microphone is optional. To try the real detectors, choose **Enable foreground microphone**, then **Enable local phrase recognition** and/or **Enable scream detection**. See [Audio Trigger: how it works](#audio-trigger-how-it-works).
 
 On mobile, Home shows all four tools. **More** opens Settings with direct links to every module and the trusted circle.
 
@@ -123,7 +123,7 @@ Contacts verified with **Simulate verification** never receive anything. The dia
 Everything runs on your device, while the Audio Trigger screen is open. No paid or cloud speech service is used.
 
 ```
-microphone ─▶ AudioWorklet (src/lib/audio-worklet.js)
+microphone ─▶ AudioWorklet (src/lib/audio-worklet.js)   [chunks also feed YAMNet scream detection]
                 ├─ volume level, 10×/s ─────────────▶ meter bars (display only)
                 ├─ 1.5 s circular buffer in RAM (overwritten, never stored)
                 └─ 4096-sample chunks, only after offline phrase recognition is enabled
@@ -146,7 +146,7 @@ Chrome on-device recognizer (if installed) ─────────▶ text +
 **Setting up the offline model.**
 
 ```sh
-npm run voice:model   # downloads public/models/vosk-model-small-en-us-0.15.tar.gz (git-ignored)
+npm run voice:model   # downloads Vosk and YAMNet into public/models/ (git-ignored)
 npm run build         # copies it into dist/models/
 ```
 
@@ -154,7 +154,9 @@ If the model file is missing, the app says so and keeps working with the simulat
 
 **Security trade-off.** The Vosk worker is Emscripten code that calls `new Function`. The page Content-Security-Policy therefore includes `script-src 'self' 'unsafe-eval'` and `worker-src 'self' blob:`. Scripts are still limited to this origin. To remove `'unsafe-eval'`, serve the Vosk worker from its own URL with a separate policy.
 
-**Scream detection** remains a labelled simulation. A free on-device option for later is MediaPipe's Audio Classifier (YAMNet), which has a "Screaming" class.
+**Scream detection.** **Enable scream detection** loads Google's free YAMNet sound classifier (Apache-2.0) through MediaPipe Audio Tasks. The model is a ~4 MB file at `/models/yamnet.tflite`, downloaded by `npm run voice:model`. The WASM runtime is bundled by Vite as same-origin assets, so no CDN is used. Twice a second, the last 1 second of audio (`AudioWindow.snapshot()`) is classified, and only the "Screaming" score is read. `ScreamGate` starts the SOS countdown only when that score is at least 0.5 in 2 of the last 3 checks, about one second of sustained screaming. A single loud bang or shout does not trigger it. The thresholds are uncalibrated starting values: shouting, singing or TV audio may trigger it, and the countdown lets you cancel.
+
+**MediaPipe metrics.** MediaPipe tries to send usage metrics (not audio) to `odml.pa.googleapis.com` every 60 seconds. The production CSP `connect-src 'self'` blocks this, and the Vite dev server sends the same header. A 70-second headless run recorded zero external requests, with the blocked attempt visible in the console.
 
 **Limits.** Accuracy has not been measured across speakers, accents or noise. Random noise can make the grammar output a single phrase word (for example, "hey"), which is why the full phrase and per-word confidence are required. Foreground only: locked-screen or background listening needs a native plugin.
 

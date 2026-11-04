@@ -68,6 +68,7 @@ const mime = {
   ".png": "image/png",
   ".json": "application/json",
   ".webmanifest": "application/manifest+json",
+  ".wasm": "application/wasm",
 };
 export function createApp(featureHandler = handleFeature) {
   return createServer(async (req, res) => {
