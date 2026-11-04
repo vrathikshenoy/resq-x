@@ -252,9 +252,5 @@ if (
         "RESQ-X running at http://127.0.0.1:" + (process.env.PORT || 3001),
       ),
   );
-  if (process.env.TELEGRAM_BOT_TOKEN) {
-    const { pollTelegram } = await import("./telegram.mjs");
-    void pollTelegram();
-    console.log("Telegram alerts enabled: listening for contact invites.");
-  }
+  (await import("./telegram.mjs")).startTelegramPolling();
 }

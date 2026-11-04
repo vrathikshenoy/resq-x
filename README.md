@@ -101,8 +101,8 @@ Every path below is free.
 **1. Set up the Telegram bot (once, about 2 minutes).**
 
 1. In Telegram, message **@BotFather**, send `/newbot`, and choose a name and a username ending in `bot`.
-2. Copy the token it gives you into `.env` as `TELEGRAM_BOT_TOKEN=...`. Keep it secret, and never commit it.
-3. Restart the server (`npm start`, or `TELEGRAM_BOT_TOKEN=... npm run dev`). It logs `Telegram alerts enabled`.
+2. Put the token in `.env` or `.env.local` (both git-ignored) as `TELEGRAM_BOT_TOKEN=...`. Keep it secret.
+3. Restart `npm start` or `npm run dev`. Both read `.env` and `.env.local`, and log `Telegram alerts enabled`. Run only one of them at a time per bot token.
 
 The server long-polls Telegram's `getUpdates`, so it needs no public URL, webhook or HTTPS. It works on localhost.
 

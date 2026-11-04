@@ -91,6 +91,12 @@ export async function handleUpdate(update) {
     "To join someone's RESQ-X trusted circle, open the invite link they shared with you. Send /stop to leave.",
   );
 }
+// Called by both npm start and npm run dev. Only one process per bot token may poll.
+export function startTelegramPolling() {
+  if (!telegramEnabled()) return;
+  void pollTelegram();
+  console.log("Telegram alerts enabled: listening for contact invites.");
+}
 export async function pollTelegram(signal) {
   let offset = 0;
   while (!signal?.aborted) {
