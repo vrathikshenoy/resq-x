@@ -33,7 +33,6 @@ export function SOS({
     [stage, setStage] = useState<"countdown" | "sending" | "done" | "error">(
       "countdown",
     ),
-    [includeLocation, setIncludeLocation] = useState(false),
     [result, setResult] = useState<AlertRecord | null>(null),
     [error, setError] = useState(""),
     [locationNote, setLocationNote] = useState("");
@@ -41,11 +40,27 @@ export function SOS({
     deadline = useRef(Date.now() + 10000),
     dialog = useRef<HTMLDialogElement>(null),
     cancel = useRef<HTMLButtonElement>(null),
-    locationChoice = useRef(false),
+    locationRequest = useRef<Promise<Location> | null>(null),
     sent = useRef(false),
     alive = useRef(true),
     payload = useRef<{ location: Location } | null>(null),
     calling = useRef(false);
+  // Every SOS includes location. Locating starts with the countdown, so those 10 s are used to get a fix
+  // and any permission prompt appears while the user is looking at the screen.
+  function requestLocation() {
+    locationRequest.current ??= new Promise<Location>((resolve) => {
+      if (!navigator.geolocation) return resolve(null);
+      navigator.geolocation.getCurrentPosition(
+        (p) =>
+          resolve({ latitude: p.coords.latitude, longitude: p.coords.longitude }),
+        () => resolve(null),
+        { timeout: 15000, maximumAge: 30000, enableHighAccuracy: true },
+      );
+    });
+  }
+  useEffect(() => {
+    requestLocation();
+  }, []);
   useEffect(() => {
     alive.current = true;
     const previous = document.activeElement as HTMLElement;
@@ -63,31 +78,16 @@ export function SOS({
     setStage("sending");
     try {
       if (!payload.current) {
-        let location = null;
-        if (locationChoice.current) {
-          try {
-            location = await new Promise<{
-              latitude: number;
-              longitude: number;
-            }>((resolve, reject) => {
-              if (!navigator.geolocation)
-                return reject(new Error("Location unavailable"));
-              navigator.geolocation.getCurrentPosition(
-                (p) =>
-                  resolve({
-                    latitude: p.coords.latitude,
-                    longitude: p.coords.longitude,
-                  }),
-                reject,
-                { timeout: 7000, maximumAge: 30000 },
-              );
-            });
-          } catch {
-            setLocationNote(
-              "Location unavailable or denied. Alert recorded without coordinates.",
-            );
-          }
-        }
+        requestLocation();
+        // An unanswered permission prompt never settles; send without location after 8 s.
+        const location = await Promise.race([
+          locationRequest.current!,
+          new Promise<null>((r) => setTimeout(() => r(null), 8000)),
+        ]);
+        if (!location)
+          setLocationNote(
+            "Location unavailable or denied. Alert sent without coordinates.",
+          );
         payload.current = {
           request_id: requestId.current,
           type,
@@ -180,23 +180,10 @@ export function SOS({
               ? "Contacts who joined on Telegram will get a real message."
               : "No contact has joined on Telegram, so nothing will be sent. You can text them by SMS afterwards."}
           </p>
-          <label className="check-label">
-            <input
-              type="checkbox"
-              checked={includeLocation}
-              onChange={(e) => {
-                setIncludeLocation(e.target.checked);
-                locationChoice.current = e.target.checked;
-              }}
-            />
-            <span>
-              Include my current location
-              <br />
-              <small>
-                Location permission is requested after the countdown.
-              </small>
-            </span>
-          </label>
+          <p className="small-text">
+            Your current location is included. If your browser asks, allow
+            location access.
+          </p>
           <button
             ref={cancel}
             className="button secondary full"
