@@ -77,7 +77,7 @@ export function App() {
   };
   const startSOS = (type: Trigger = "manual") => {
     if (!contacts.some((c) => c.verified)) {
-      setNotice("Add a contact and simulate verification before trying SOS.");
+      setNotice("Add a contact and verify them (invite on Telegram) before using SOS.");
       setPage("contacts");
       return;
     }
@@ -300,16 +300,20 @@ export function App() {
                   <section className="card sos-card">
                     <div className="section-title">
                       <h2>A way to reach out</h2>
-                      <span className="pill coral">Demo mode</span>
+                      <span className="pill coral">
+                        {contacts.some((c) => c.telegram)
+                          ? "Live · Telegram"
+                          : "Practice mode"}
+                      </span>
                     </div>
                     <p>
-                      Practice sending an SOS to your trusted circle. You’ll
-                      have 10 seconds to cancel.
+                      Send an SOS to your trusted circle. You’ll have 10
+                      seconds to cancel.
                     </p>
                     <button className="sos-orb" onClick={() => startSOS()}>
                       <LifeBuoy size={30} />
                       <strong>SOS</strong>
-                      <span>Start a test alert</span>
+                      <span>Start an alert</span>
                     </button>
                     <p className="fine-print">
                       Simulation only. No real messages
@@ -342,7 +346,7 @@ export function App() {
                     </h3>
                     <p>
                       {contacts.length
-                        ? `${contacts.filter((c) => c.verified).length} verified in simulation. Ready for a rehearsal.`
+                        ? `${contacts.filter((c) => c.telegram).length} receive real alerts on Telegram, ${contacts.filter((c) => c.verified && !c.telegram).length} simulation only.`
                         : "Add someone you trust before trying an alert."}
                     </p>
                     <button
@@ -515,6 +519,7 @@ export function App() {
       {sos && (
         <SOS
           type={sos}
+          contacts={contacts}
           onClose={() => {
             setSos(null);
             setAlertsRevision((v) => v + 1);

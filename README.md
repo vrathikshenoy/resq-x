@@ -2,7 +2,7 @@
 
 A mobile-first personal safety and digital privacy prototype, implemented from the 13-page `../Documentation.pdf`. Install it as a PWA, or package the hosted app in an Android/iOS Capacitor wrapper.
 
-**This is a demonstration, not an emergency service. All SMS and contact verification are simulated.**
+**This is a prototype, not an emergency service.** Real SOS alerts go only to contacts who joined through Telegram. Contacts verified with **Simulate verification** receive nothing. In an emergency, call 112.
 
 ## Run
 
@@ -33,8 +33,8 @@ Dependencies already present on this machine were reused for the build because p
 | Feature          | Working behavior                                                                                                                                    | Simulation / limit                                                                                                                         |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Foundation       | Responsive app shell, registration/login/logout, private demo sessions, persistent SQLite, PBKDF2 passwords, expiring HttpOnly cookie sessions      | No email verification or password recovery; single-server prototype                                                                        |
-| Trusted circle   | Add, edit, remove and validate up to 10 international-format contacts; changing a number resets verification                                        | Verification explicitly simulated; contact consent must be obtained separately                                                             |
-| SOS              | Ten-second cancellable dialog, optional location requested afterward, idempotent server requests, per-contact results, account-scoped alert history | Mock delivery only. No actual SMS, calls, push notifications or emergency dispatch                                                         |
+| Trusted circle   | Add, edit, remove and validate up to 10 international-format contacts. Real verification: the contact opens a Telegram invite and taps Start (consent) | Demo **Simulate verification** remains and sends nothing. Changing a number resets verification and the Telegram link                       |
+| SOS              | Ten-second cancellable dialog, optional location, real Telegram messages with per-contact sent/failed status, pre-filled SMS fallback, Call 112       | Free Telegram bot needs `TELEGRAM_BOT_TOKEN`. SMS is sent by the user from their phone. No emergency dispatch integration                   |
 | RouteShield      | Live OSM tiles, GPS/map-picked endpoints, Overpass street graphs, Dijkstra shortest/weighted paths, inspectable street tags and fetch timestamp     | Offline graph is fictional. Live OSM depends on network and incomplete tags; weights do not establish safety                               |
 | DeepCloak        | Local image validation, orientation-aware browser decoding, preview, bounded ±8 channel changes, metadata-free PNG export, measured PSNR            | Random perturbation simulation; no face detection/model, PGD/EOT, embeddings or measured model protection                                  |
 | TrackShield      | Native foreground BluetoothLe plugin adapter and supported-browser advertisement scans, signal history, local trust list and RSSI calibration       | Three-second demo scans always available. Repeated detection rule uses self-reported movement; no directional radar or stalking conclusion |
@@ -45,8 +45,8 @@ Dependencies already present on this machine were reused for the build because p
 ## A five-minute walkthrough
 
 1. Choose **Try the demo** and open **Set up my safety circle**.
-2. Add a contact using an international number (for example `+15550102001`) and choose **Simulate verification**. No messages are sent.
-3. Choose **Practice an SOS**, cancel once, then try again and let the countdown complete. Inspect the test alert history. Location is optional and permission denial does not block the mock alert.
+2. Add a contact using an international number (for example `+15550102001`). Choose **Invite on Telegram** for real alerts (see [SOS alerts](#sos-alerts-how-they-work)), or **Simulate verification** for a demo that sends nothing.
+3. Choose **Start an SOS**, cancel once, then try again and let the countdown complete. The dialog says up front whether the alert is real (Telegram contacts) or practice. Afterwards, inspect each contact's delivery status in the alert history. Location is optional, and denying permission does not block the alert.
 4. Open **RouteShield**. **Live OSM data** is the default online. Use **Use my location** or **Set start on map**, then **Set destination on map** (or enter coordinates). Choose **Compare walking routes** for locations within 3 km. Inspect shortest/weighted alternatives, lighting tags and the real-data timestamp. **Offline demo** is an explicit sample mode; live failure never returns fabricated data.
 5. Open **DeepCloak**, choose a file or sample illustration, confirm permission, and run the simulation. Compare and download the result. Metrics refer to pixel changes against the resized input, not face-model effectiveness.
 6. Open **TrackShield**. Real scanning is the default. A native build with the BluetoothLe plugin, or a browser exposing BLE advertisement scanning, requests permission when you press **Start foreground scan**. Unsupported browsers show the limitation and no devices. To rehearse without hardware, select **Optional sample** explicitly; repeat three scans with movement marked twice.
@@ -71,15 +71,16 @@ All feature endpoints require the session cookie. JSON requests are limited to 1
 
 | Method               | Endpoint                                 | Purpose                                                                                                |
 | -------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| GET                  | `/health`                                | Process/database status; SMS mode                                                                      |
+| GET                  | `/health`                                | Process/database status; `alerts` is `telegram` or `simulation`                                        |
 | POST                 | `/api/v1/auth/register`                  | `{name,email,password}`                                                                                |
 | POST                 | `/api/v1/auth/login`                     | `{email,password}`                                                                                     |
 | POST                 | `/api/v1/auth/demo`                      | Creates an isolated demo session                                                                       |
 | GET / POST           | `/api/v1/auth/me`, `/api/v1/auth/logout` | Current account / end session                                                                          |
 | GET / POST           | `/api/v1/contacts`                       | List / add `{name,phone,relation}`                                                                     |
 | PUT / PATCH / DELETE | `/api/v1/contacts/:id`                   | Edit / `{verify_simulation:true}` / remove                                                             |
+| POST                 | `/api/v1/contacts/:id/telegram`          | `{}` → `{link}`: one-time Telegram invite (7 days); 503 when no bot token is configured                |
 | POST                 | `/api/v1/alerts/trigger`                 | `{request_id,type,location}`; type is manual/phrase/scream; location is null or `{latitude,longitude}` |
-| GET                  | `/api/v1/alerts`                         | Latest 50 alerts with explicitly simulated delivery results                                            |
+| GET                  | `/api/v1/alerts`                         | Latest 50 alerts; each recipient has `channel` (telegram/simulation) and `status` (sent/failed/simulated) |
 | GET                  | `/api/v1/navigation/places`              | Fictional demo locations                                                                               |
 | POST                 | `/api/v1/navigation/route`               | `{mode:"demo",origin:"0",destination:"15"}` or `{mode:"live",origin:[lat,lon],destination:[lat,lon]}`  |
 
@@ -92,6 +93,30 @@ Tracking observations and trusted-device identifiers stay in the browser. The op
 Lighting is `1` for a lit tag, `0` for explicitly unlit, and `0.5` for unknown. Activity counts selected amenity/shop nodes within 75 m of the segment midpoint, capped at three. This is a starting heuristic, not a validated safety score. Nearby amenities may be closed. Pedestrian restrictions, `oneway:foot`, disconnected streets and missing tags are handled. Access and other real-world walking restrictions may still be incomplete in OSM.
 
 Live requests use a primary Overpass endpoint and one bounded failover endpoint for transient failures, at most 3 km between endpoints, a bounded area, response/time/graph-size limits and a one-hour in-memory cache of up to ten public street graphs. Endpoint connectors are not turn-by-turn directions. The live map loads real OpenStreetMap raster tiles and overlays returned route geometry in Web Mercator. It supports pan, zoom, GPS and selecting start/destination points. Tiles follow normal browser caching; there is no offline tile download or prefetch. Failed tiles are reported while route geometry remains visible. OSM attribution links to its copyright page.
+
+### SOS alerts: how they work
+
+Every path below is free.
+
+**1. Set up the Telegram bot (once, about 2 minutes).**
+
+1. In Telegram, message **@BotFather**, send `/newbot`, and choose a name and a username ending in `bot`.
+2. Copy the token it gives you into `.env` as `TELEGRAM_BOT_TOKEN=...`. Keep it secret, and never commit it.
+3. Restart the server (`npm start`, or `TELEGRAM_BOT_TOKEN=... npm run dev`). It logs `Telegram alerts enabled`.
+
+The server long-polls Telegram's `getUpdates`, so it needs no public URL, webhook or HTTPS. It works on localhost.
+
+**2. Invite each contact.** In **Trusted circle**, choose **Invite on Telegram** and share the link (WhatsApp, SMS, anything). When your contact opens it and taps **Start**, the bot links their Telegram chat to that contact, marks them verified and confirms with a message. Tapping Start is their consent. They can send `/stop` at any time to leave every circle. Links work once and expire after 7 days. Changing the contact's phone number unlinks them.
+
+**3. On SOS**, after the 10-second countdown:
+
+- **Telegram:** each linked contact gets a message with your name, the trigger (button, phrase or scream) and an OpenStreetMap link if you shared your location. Each recipient is recorded as `sent` or `failed`, with the reason. A retry with the same alert ID never sends twice.
+- **SMS fallback:** **Also text them by SMS** opens your phone's messaging app with every contact and the message (plus location) filled in. You tap Send, and it uses your own SMS plan. This works with no server and no internet data.
+- **Call 112:** shown during the countdown and afterwards. During the countdown it sends the alert immediately and then opens the dialer, because leaving the app would otherwise cancel the countdown. 112 is India's and Europe's emergency number, and most mobile phones also route it to the local emergency service.
+
+Contacts verified with **Simulate verification** never receive anything. The dialog and alert history label them "simulated, nothing sent".
+
+**Limits.** Contacts need Telegram. The server must be running to send, but the SMS and 112 buttons work without it. Telegram limits bots to roughly 30 messages per second, far above 10 contacts. Automatic SMS without the user tapping Send would need a paid provider (Twilio, MSG91 with Indian DLT registration).
 
 ### Audio Trigger: how it works
 
@@ -107,7 +132,7 @@ Chrome on-device recognizer (if installed) ─────────▶ text +
                                                       │
                      matchesPhrase(): whole phrase, confidence ≥ 0.75
                                                       ▼
-                     10-second cancellable SOS countdown ─▶ simulated alert
+                     10-second cancellable SOS countdown ─▶ Telegram alert (or simulation)
 ```
 
 1. **Enable foreground microphone** asks for microphone permission and starts the volume meter. Volume alone never triggers an SOS.

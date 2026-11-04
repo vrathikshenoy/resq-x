@@ -597,3 +597,81 @@ test("routing deadlines allow the Overpass queue and both backend attempts", asy
     globalThis.fetch = previous;
   }
 });
+test("Telegram invite, consent, real SOS delivery, failure and /stop", async () => {
+  const { handleUpdate } = await import("../backend/telegram.mjs");
+  const user = await call("/api/v1/auth/demo", {}),
+    contact = (
+      await call(
+        "/api/v1/contacts",
+        { name: "Ravi", phone: "+919800000001", relation: "Brother" },
+        user.cookie,
+      )
+    ).body,
+    invitePath = `/api/v1/contacts/${contact.id}/telegram`;
+  delete process.env.TELEGRAM_BOT_TOKEN;
+  assert.equal((await call(invitePath, {}, user.cookie)).status, 503);
+  const sent = [],
+    previousFetch = globalThis.fetch;
+  let failSend = false;
+  globalThis.fetch = async (url, init) => {
+    const method = String(url).split("/").pop(),
+      body = JSON.parse(init.body);
+    if (method === "sendMessage") {
+      if (failSend)
+        return Response.json({ ok: false, description: "Forbidden: bot was blocked by the user" }, { status: 403 });
+      sent.push(body);
+    }
+    return Response.json({ ok: true, result: method === "getMe" ? { username: "resqx_test_bot" } : {} });
+  };
+  process.env.TELEGRAM_BOT_TOKEN = "123:test";
+  try {
+    const invite = await call(invitePath, {}, user.cookie);
+    assert.equal(invite.status, 200);
+    const code = invite.body.link.match(/^https:\/\/t\.me\/resqx_test_bot\?start=([a-f0-9]{32})$/)[1];
+    const message = (text, id = 777) => ({ update_id: 1, message: { text, chat: { id, type: "private" } } });
+    await handleUpdate(message("/start " + "0".repeat(32)));
+    assert.match(sent.pop().text, /expired/);
+    await handleUpdate(message("/start " + code));
+    assert.match(sent.pop().text, /Explorer's RESQ-X trusted circle/);
+    let [row] = (await call("/api/v1/contacts", null, user.cookie)).body;
+    assert.equal(row.verified, 1);
+    assert.equal(row.telegram, 1);
+    await handleUpdate(message("/start " + code, 888));
+    assert.match(sent.pop().text, /expired or was already used/);
+    const alert = {
+      request_id: "telegram-alert-0001",
+      type: "phrase",
+      location: { latitude: 12.97, longitude: 77.59 },
+    };
+    const first = await call("/api/v1/alerts/trigger", alert, user.cookie);
+    assert.equal(first.status, 201);
+    assert.equal(first.body.status, "sent");
+    assert.equal(first.body.simulation, false);
+    assert.deepEqual(
+      [first.body.recipients[0].channel, first.body.recipients[0].status],
+      ["telegram", "sent"],
+    );
+    const delivered = sent.pop();
+    assert.equal(delivered.chat_id, "777");
+    assert.match(delivered.text, /SOS from Explorer[\s\S]*emergency phrase[\s\S]*mlat=12\.97&mlon=77\.59/);
+    await call("/api/v1/alerts/trigger", alert, user.cookie);
+    assert.equal(sent.length, 0, "a retry must not send again");
+    failSend = true;
+    const failed = await call(
+      "/api/v1/alerts/trigger",
+      { ...alert, request_id: "telegram-alert-0002", location: null },
+      user.cookie,
+    );
+    assert.equal(failed.body.status, "failed");
+    assert.match(failed.body.recipients[0].error, /blocked/);
+    failSend = false;
+    await handleUpdate(message("/stop"));
+    assert.match(sent.pop().text, /left every RESQ-X circle/);
+    [row] = (await call("/api/v1/contacts", null, user.cookie)).body;
+    assert.equal(row.verified, 0);
+    assert.equal(row.telegram, 0);
+  } finally {
+    globalThis.fetch = previousFetch;
+    delete process.env.TELEGRAM_BOT_TOKEN;
+  }
+});

@@ -10,3 +10,15 @@ CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT NOT NULL, email
 CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), expires INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS contacts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), name TEXT NOT NULL, phone TEXT NOT NULL, relation TEXT NOT NULL, verified INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id,phone));
 CREATE TABLE IF NOT EXISTS alerts (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), request_id TEXT NOT NULL, type TEXT NOT NULL, created TEXT NOT NULL, latitude REAL, longitude REAL, status TEXT NOT NULL, recipients TEXT NOT NULL, UNIQUE(user_id,request_id));`);
+// Columns added after the first release; existing databases are migrated in place.
+const columns = db
+  .prepare("PRAGMA table_info(contacts)")
+  .all()
+  .map((c) => c.name);
+for (const [name, type] of [
+  ["telegram_chat_id", "TEXT"],
+  ["telegram_code", "TEXT"],
+  ["telegram_code_expires", "INTEGER"],
+])
+  if (!columns.includes(name))
+    db.exec(`ALTER TABLE contacts ADD COLUMN ${name} ${type}`);

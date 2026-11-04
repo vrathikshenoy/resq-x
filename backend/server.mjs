@@ -91,7 +91,7 @@ export function createApp(featureHandler = handleFeature) {
       if (path === "/health" && method === "GET")
         return json(res, 200, {
           status: "ok",
-          sms: "simulation",
+          alerts: process.env.TELEGRAM_BOT_TOKEN ? "telegram" : "simulation",
           database: !!db.prepare("SELECT 1").get(),
         });
       const data = ["POST", "PUT", "PATCH"].includes(method)
@@ -251,4 +251,9 @@ if (
         "RESQ-X running at http://127.0.0.1:" + (process.env.PORT || 3001),
       ),
   );
+  if (process.env.TELEGRAM_BOT_TOKEN) {
+    const { pollTelegram } = await import("./telegram.mjs");
+    void pollTelegram();
+    console.log("Telegram alerts enabled: listening for contact invites.");
+  }
 }
