@@ -1,3 +1,42 @@
+// Known tracker advertisements. Native (Capacitor) gives plain objects, browsers give Maps; both normalize here.
+const entries = (data) =>
+  data instanceof Map ? [...data] : Object.entries(data ?? {});
+const fullUuid = (uuid) => {
+  const u = String(uuid).toLowerCase();
+  return /^[0-9a-f]{4}$/.test(u) ? `0000${u}-0000-1000-8000-00805f9b34fb` : u;
+};
+const sig = (short) => fullUuid(short);
+const bytes = (view) =>
+  view instanceof DataView
+    ? new Uint8Array(view.buffer, view.byteOffset, view.byteLength)
+    : new Uint8Array(view ?? []);
+export function identifyTracker({ manufacturerData, serviceData, uuids } = {}) {
+  for (const [company, data] of entries(manufacturerData)) {
+    const b = bytes(data);
+    // Apple Find My "offline finding" frame: type 0x12; length 0x19 means separated from its owner.
+    if (Number(company) === 0x004c && b[0] === 0x12)
+      return {
+        kind: "findmy",
+        label: "Apple Find My tracker (AirTag or compatible)",
+        separated: b[1] === 0x19,
+      };
+  }
+  const service = new Map(
+    entries(serviceData).map(([uuid, data]) => [fullUuid(uuid), bytes(data)]),
+  );
+  const advertised = new Set([...service.keys(), ...(uuids ?? []).map(fullUuid)]);
+  // Cross-vendor "Detecting Unwanted Location Trackers" standard: only sent while separated.
+  if (advertised.has(sig("fcb2")))
+    return { kind: "dult", label: "Location tracker (unwanted-tracking standard)", separated: true };
+  const fmdn = service.get(sig("feaa"));
+  if (fmdn && (fmdn[0] === 0x40 || fmdn[0] === 0x41))
+    return { kind: "fmdn", label: "Google Find Hub tracker", separated: fmdn[0] === 0x41 };
+  if (advertised.has(sig("fd5a")))
+    return { kind: "smarttag", label: "Samsung SmartTag", separated: null };
+  if (advertised.has(sig("feed")) || advertised.has(sig("feec")))
+    return { kind: "tile", label: "Tile tracker", separated: null };
+  return null;
+}
 export function trackingSupport(capacitor, bluetooth, secure = true) {
   if (!secure)
     return {
@@ -45,7 +84,7 @@ export async function startRealScan({
     scan = null,
     plugin = null;
   const lastSeen = new Map();
-  function forward(id, name, rssi) {
+  function forward(id, name, rssi, advertisement) {
     if (
       closed ||
       signal.aborted ||
@@ -65,6 +104,7 @@ export async function startRealScan({
       id,
       typeof name === "string" ? name : "Unnamed BLE device",
       rssi,
+      identifyTracker(advertisement),
     );
   }
   async function stop() {
@@ -85,7 +125,7 @@ export async function startRealScan({
     void stop().catch(() => {});
   };
   const webListener = (event) =>
-    forward(event.device?.id, event.device?.name, event.rssi);
+    forward(event.device?.id, event.device?.name, event.rssi, event);
   function checkCancelled() {
     if (signal.aborted) throw new DOMException("Scan cancelled.", "AbortError");
   }
@@ -107,6 +147,7 @@ export async function startRealScan({
           event.device?.deviceId,
           event.localName || event.device?.name,
           event.rssi,
+          event,
         ),
       );
       checkCancelled();

@@ -37,7 +37,7 @@ Dependencies already present on this machine were reused for the build because p
 | SOS              | Ten-second cancellable dialog, optional location, real Telegram messages with per-contact sent/failed status, pre-filled SMS fallback, Call 112       | Free Telegram bot needs `TELEGRAM_BOT_TOKEN`. SMS is sent by the user from their phone. No emergency dispatch integration                   |
 | RouteShield      | Live OSM tiles, GPS/map-picked endpoints, Overpass street graphs, Dijkstra shortest/weighted paths, inspectable street tags and fetch timestamp     | Offline graph is fictional. Live OSM depends on network and incomplete tags; weights do not establish safety                               |
 | DeepCloak        | Local image validation, orientation-aware browser decoding, preview, bounded ±8 channel changes, metadata-free PNG export, measured PSNR            | Random perturbation simulation; no face detection/model, PGD/EOT, embeddings or measured model protection                                  |
-| TrackShield      | Native foreground BluetoothLe plugin adapter and supported-browser advertisement scans, signal history, local trust list and RSSI calibration       | Three-second demo scans always available. Repeated detection rule uses self-reported movement; no directional radar or stalking conclusion |
+| TrackShield      | Native BluetoothLe and supported-browser advertisement scans, signal history, trust list, RSSI calibration, identification of AirTag/Find My, Google Find Hub, SmartTag, Tile and standard (DULT) trackers | Foreground only. Sample mode is optional and labelled. No directional radar; an identified tracker is not proof of stalking |
 | Audio Trigger    | Explicit microphone permission, AudioWorklet meter, wake phrase (Chrome on-device or free offline Vosk), scream detection (free on-device YAMNet)    | Phrase and scream thresholds uncalibrated. Simulations work without a mic. No audio ever leaves the device                                   |
 | PWA              | Standalone manifest, maskable icons, versioned offline app shell, responsive safe-area navigation                                                   | Visit once online. Photos, route demos and BLE demos work offline; contacts and alerts require the server                                  |
 | Native packaging | Capacitor config and Android/iOS setup instructions                                                                                                 | Native BLE adapter requires installing the documented plugin and rebuilding; no native binary or background sensor implementation          |
@@ -49,7 +49,7 @@ Dependencies already present on this machine were reused for the build because p
 3. Choose **Start an SOS**, cancel once, then try again and let the countdown complete. The dialog says up front whether the alert is real (Telegram contacts) or practice. Afterwards, inspect each contact's delivery status in the alert history. Location is optional, and denying permission does not block the alert.
 4. Open **RouteShield**. **Live OSM data** is the default online. Use **Use my location** or **Set start on map**, then **Set destination on map** (or enter coordinates). Choose **Compare walking routes** for locations within 3 km. Inspect shortest/weighted alternatives, lighting tags and the real-data timestamp. **Offline demo** is an explicit sample mode; live failure never returns fabricated data.
 5. Open **DeepCloak**, choose a file or sample illustration, confirm permission, and run the simulation. Compare and download the result. Metrics refer to pixel changes against the resized input, not face-model effectiveness.
-6. Open **TrackShield**. Real scanning is the default. A native build with the BluetoothLe plugin, or a browser exposing BLE advertisement scanning, requests permission when you press **Start foreground scan**. Unsupported browsers show the limitation and no devices. To rehearse without hardware, select **Optional sample** explicitly; repeat three scans with movement marked twice.
+6. Open **TrackShield**. Real scanning is the default. A native build with the BluetoothLe plugin, or a browser exposing BLE advertisement scanning, requests permission when you press **Start foreground scan**. Unsupported browsers show the limitation and no devices. To rehearse without hardware, select **Optional sample** explicitly. Its "Unfamiliar sample tag" acts as a separated Find My tracker, so two scans with movement marked once raise a warning. See [TrackShield: tracker identification](#trackshield-tracker-identification).
 7. Open **Audio Trigger** and rehearse a phrase/scream trigger. A real microphone is optional. To try the real detectors, choose **Enable foreground microphone**, then **Enable local phrase recognition** and/or **Enable scream detection**. See [Audio Trigger: how it works](#audio-trigger-how-it-works).
 
 On mobile, Home shows all four tools. **More** opens Settings with direct links to every module and the trusted circle.
@@ -93,6 +93,22 @@ Tracking observations and trusted-device identifiers stay in the browser. The op
 Lighting is `1` for a lit tag, `0` for explicitly unlit, and `0.5` for unknown. Activity counts selected amenity/shop nodes within 75 m of the segment midpoint, capped at three. This is a starting heuristic, not a validated safety score. Nearby amenities may be closed. Pedestrian restrictions, `oneway:foot`, disconnected streets and missing tags are handled. Access and other real-world walking restrictions may still be incomplete in OSM.
 
 Live requests use a primary Overpass endpoint and one bounded failover endpoint for transient failures, at most 3 km between endpoints, a bounded area, response/time/graph-size limits and a one-hour in-memory cache of up to ten public street graphs. Endpoint connectors are not turn-by-turn directions. The live map loads real OpenStreetMap raster tiles and overlays returned route geometry in Web Mercator. It supports pan, zoom, GPS and selecting start/destination points. Tiles follow normal browser caching; there is no offline tile download or prefetch. Failed tiles are reported while route geometry remains visible. OSM attribution links to its copyright page.
+
+### TrackShield: tracker identification
+
+Each Bluetooth advertisement is checked for the broadcast formats that item trackers use (`identifyTracker` in `src/lib/ble.mjs`):
+
+| Tracker | Signal in the advertisement | "Away from owner" |
+|---|---|---|
+| Apple Find My (AirTag, Chipolo Spot, other Find My items) | Manufacturer data, company `0x004C`, type `0x12` | Length byte `0x19` (separated) vs `0x02` (near owner) |
+| Unwanted-tracking standard (DULT, Apple/Google) | Service UUID `0xFCB2` | Always (sent only while separated) |
+| Google Find Hub | Service data `0xFEAA`, frame `0x40`/`0x41` | Frame `0x41` |
+| Samsung SmartTag | Service data `0xFD5A` | Not reported |
+| Tile | Service UUID `0xFEED`/`0xFEEC` | Not reported |
+
+Identified trackers are listed first and labelled. A tracker that says it is away from its owner raises the "repeated detection" warning after **2 scan sessions with 1 movement**, instead of 3 sessions with 2 movements. A separated AirTag keeps its address for hours, while near its owner it rotates about every 15 minutes, so repeated sightings of a separated tracker are meaningful.
+
+**Limits.** Scanning works only while TrackShield is open. Browsers may hide some advertisement data. Address rotation can split one tracker into several entries. An identified tracker near you may belong to someone travelling with you, so the app shows evidence, not conclusions. Your phone's built-in unwanted-tracking alerts (iOS, and Android's "Unknown tracker alerts") remain the most reliable check.
 
 ### SOS alerts: how they work
 

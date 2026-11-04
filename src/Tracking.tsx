@@ -20,7 +20,20 @@ import {
   trackingSupport,
   type CapacitorBLE,
   type BrowserBLE,
+  type Tracker,
 } from "./lib/ble.mjs";
+const SAMPLE_TRACKER: Tracker = {
+  kind: "findmy",
+  label: "Apple Find My tracker (sample)",
+  separated: true,
+};
+const trackerNote = (t: Tracker) =>
+  t.label +
+  (t.separated === true
+    ? " · away from its owner"
+    : t.separated === false
+      ? " · near its owner"
+      : "");
 export function Tracking({
   userId,
   visible,
@@ -106,13 +119,19 @@ export function Tracking({
     setError("");
     const current = run.current,
       session = crypto.randomUUID();
-    const observe = (id: string, name: string, rssi: number) => {
+    const observe = (
+      id: string,
+      name: string,
+      rssi: number,
+      tracker: Tracker | null = null,
+    ) => {
       if (active.current && current === run.current)
         setDevices((old) =>
           appendObservation(old, {
             id,
             name,
             rssi,
+            tracker,
             time: Date.now(),
             session,
             moved,
@@ -128,6 +147,7 @@ export function Tracking({
           "demo-tag",
           "Unfamiliar sample tag",
           -60 + (count % 3) * 2 + (sample % 2),
+          SAMPLE_TRACKER,
         );
         observe("demo-headphones", "Sample headphones", -47 + (sample % 3));
         if (count === 1) observe("demo-watch", "Passing sample watch", -83);
@@ -176,7 +196,9 @@ export function Tracking({
 
   const device = devices.find((d) => d.id === selected),
     warnings = devices.filter(
-      (d) => summarizeDevice(d.observations, trusted.includes(d.id)).persistent,
+      (d) =>
+        summarizeDevice(d.observations, trusted.includes(d.id), d.tracker)
+          .persistent,
     );
   return (
     <div className="stack">
@@ -206,7 +228,7 @@ export function Tracking({
         </strong>{" "}
         {mode === "demo"
           ? "Sample devices are generated locally. Nothing is being scanned."
-          : "Unknown devices are not necessarily trackers. Identifiers can rotate and many trackers cannot be observed."}{" "}
+          : "AirTag/Find My, Google Find Hub, Samsung SmartTag and Tile trackers are labelled when their broadcast is visible. Other unknown devices are not necessarily trackers, and identifiers can rotate."}{" "}
         RSSI cannot provide an exact bearing.
       </div>
       <div className="feature-grid">
@@ -332,10 +354,13 @@ export function Tracking({
               </div>
             ) : (
               <div className="device-list">
-                {devices.map((d) => {
+                {[...devices]
+                  .sort((a, b) => Number(!!b.tracker) - Number(!!a.tracker))
+                  .map((d) => {
                   const summary = summarizeDevice(
                       d.observations,
                       trusted.includes(d.id),
+                      d.tracker,
                     ),
                     last = d.observations.at(-1)!;
                   return (
@@ -364,6 +389,11 @@ export function Tracking({
                             {Math.max(0, Math.floor((tick - last.time) / 1000))}
                             s since last seen
                           </small>
+                          {d.tracker && (
+                            <small className="tracker-note">
+                              {trackerNote(d.tracker)}
+                            </small>
+                          )}
                           <em>
                             {trusted.includes(d.id)
                               ? "Trusted by you"
@@ -419,8 +449,17 @@ export function Tracking({
               <span className="pill">
                 {trusted.includes(device.id)
                   ? "Trusted by you"
-                  : "Unknown device"}
+                  : device.tracker
+                    ? "Identified tracker"
+                    : "Unknown device"}
               </span>
+              {device.tracker && (
+                <p className="small-text">
+                  {trackerNote(device.tracker)}. Identified from its Bluetooth
+                  broadcast format. Separated trackers keep the same address
+                  for hours, so repeated sightings are meaningful.
+                </p>
+              )}
               <div className="signal-chart" aria-label="RSSI signal history">
                 {device.observations.map((o, i) => (
                   <div
@@ -438,6 +477,7 @@ export function Tracking({
                   summarizeDevice(
                     device.observations,
                     trusted.includes(device.id),
+                    device.tracker,
                   ).trend
                 }
                 . Higher bars mean stronger signal, not direction.

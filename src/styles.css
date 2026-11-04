@@ -1293,6 +1293,10 @@ input::placeholder {
   font-size: 10px;
   margin-top: 5px;
 }
+.device-item .tracker-note {
+  color: var(--coral);
+  font-weight: 600;
+}
 .verification {
   display: inline-flex;
   align-items: center;
