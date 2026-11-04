@@ -23,17 +23,19 @@ export class AudioWindow {
     this.position = 0;
   }
 }
+// Recognizers transcribe the spoken brand name "ResQ" as the dictionary word "rescue".
+export const normalizePhrase = (s) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\bresq\b/g, "rescue")
+    .replace(/\s+/g, " ")
+    .trim();
 export function matchesPhrase(transcript, phrase, confidence) {
-  const normalize = (s) =>
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  const p = normalize(phrase);
+  const p = normalizePhrase(phrase);
   return (
     p.length >= 5 &&
     confidence >= 0.75 &&
-    (" " + normalize(transcript) + " ").includes(" " + p + " ")
+    (" " + normalizePhrase(transcript) + " ").includes(" " + p + " ")
   );
 }

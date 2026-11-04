@@ -8,8 +8,6 @@ const shell = [
   "/icon.svg",
   "/icon-192.png",
   "/icon-512.png",
-  "/audio-core.mjs",
-  "/audio-worklet.js",
   ...assets,
 ];
 const version = createHash("sha256");

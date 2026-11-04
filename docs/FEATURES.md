@@ -9,7 +9,7 @@ Source review: all 13 pages of `../Documentation.pdf` extracted, with the TrackS
 | RouteShield    | Implemented; algorithm tested                            | Real OSM tile viewer with GPS/map-picked points; live Overpass graph, shared Dijkstra, weights and explicit unknown tags. Live network retrieval untested here.                       |
 | DeepCloak      | Simulation implemented; pixel logic tested               | Local processing, original/output preview and PNG download. No face model, PGD/EOT or efficacy measurements. Browser decoding/export untested here.                                   |
 | TrackShield    | Native and supported-browser scan adapters implemented   | Bounded histories, trust list, persistence/movement rule and calibrated estimate. Native BluetoothLe scan lifecycle tested using mocks; physical BLE and calibration untested.        |
-| Audio Trigger  | Experimental foreground path and simulations implemented | RAM-only worklet, on-device-only recognizer gate, cooldown, countdown integration. Hardware/audio events untested. Scream classifier simulated.                                       |
+| Audio Trigger  | Experimental foreground path and simulations implemented | RAM-only worklet, Chrome on-device recognizer (with pack install) or free offline Vosk fallback, cooldown, countdown integration. Mic/speech accuracy untested. Scream simulated.                                       |
 | PWA / native   | PWA build verified; native scaffold provided             | Manifest/icons/versioned shell emitted. Real offline/install flow and SDK builds untested. Capacitor wraps a hosted HTTPS app; BluetoothLe plugin installation/rebuild is documented. |
 
 ## Scope decisions
@@ -18,7 +18,7 @@ Source review: all 13 pages of `../Documentation.pdf` extracted, with the TrackS
 - Photo and tracking data stay on the client; no unnecessary upload/sync endpoints.
 - Random image perturbation is explicitly a simulation, not adversarial optimization. A licensed and evaluated face model is needed for the intended DeepCloak experiment.
 - BLE persistence is an experimental rule (three distinct scans, two self-reported movement sessions), not a trained/calibrated detector. No directional location claims.
-- Live browser speech recognition only runs if the platform confirms local processing; no server recognizer is allowed. Scream detection remains a labeled simulation without a trained dataset/model.
+- Speech recognition is on-device only: Chrome's local recognizer when installed, otherwise Vosk (WASM, self-hosted model). No server or cloud recognizer is allowed. Scream detection remains a labeled simulation without a trained dataset/model.
 - All contact verification and alert delivery are mock operations. Connecting a real provider must include verified recipients, consent, delivery callbacks, idempotency and failure handling.
 - No background or locked-screen monitoring is claimed, including in the native wrapper.
 

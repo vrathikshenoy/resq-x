@@ -308,7 +308,7 @@ test("tracking requires separate sessions and movement; trusted devices suppress
 });
 test("audio circular buffer is bounded and phrase matching uses confidence and whole words", async () => {
   const { AudioWindow, matchesPhrase } =
-    await import("../public/audio-core.mjs");
+    await import("../src/lib/audio-core.mjs");
   const audio = new AudioWindow(8000);
   assert.equal(audio.buffer.length, 12000);
   audio.push(new Float32Array(20000).fill(0.5));
@@ -320,6 +320,7 @@ test("audio circular buffer is bounded and phrase matching uses confidence and w
   assert.equal(matchesPhrase("Hey ResQ, help!", "Hey ResQ help", 0.9), true);
   assert.equal(matchesPhrase("Hey ResQ helpful", "Hey ResQ help", 0.9), false);
   assert.equal(matchesPhrase("Hey ResQ help", "Hey ResQ help", 0.3), false);
+  assert.equal(matchesPhrase("hey rescue help", "Hey ResQ help", 0.9), true);
 });
 test("JSON object boundary, duplicate contacts and API methods", async () => {
   assert.equal((await call("/api/v1/auth/demo", [])).status, 422);
