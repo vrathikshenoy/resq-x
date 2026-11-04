@@ -5,6 +5,7 @@ export class AudioWindow {
   push(samples: Float32Array): number;
   clear(): void;
 }
+export function normalizePhrase(s: string): string;
 export function matchesPhrase(
   transcript: string,
   phrase: string,

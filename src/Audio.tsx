@@ -26,8 +26,20 @@ type RecognitionConstructor = {
     langs: string[];
     processLocally: boolean;
   }) => Promise<string>;
+  install?: (options: {
+    langs: string[];
+    processLocally: boolean;
+  }) => Promise<boolean>;
 };
-import { matchesPhrase } from "../public/audio-core.mjs";
+import type { Model } from "vosk-browser";
+import { matchesPhrase, normalizePhrase } from "./lib/audio-core.mjs";
+// Vite bundles the worklet with its audio-core import and returns the hashed asset URL.
+import workletUrl from "./lib/audio-worklet.js?worker&url";
+// Free offline fallback model, served from this app's origin (npm run voice:model). Override to self-host elsewhere.
+const VOSK_MODEL_URL =
+  import.meta.env.VITE_VOSK_MODEL_URL ||
+  "/models/vosk-model-small-en-us-0.15.tar.gz";
+const VOICE_IDLE = ["Off", "Unavailable", "Stopped"];
 export function Audio({
   onTrigger,
   ready,
@@ -48,6 +60,9 @@ export function Audio({
   const stream = useRef<MediaStream | null>(null),
     context = useRef<AudioContext | null>(null),
     recognition = useRef<Recognition | null>(null),
+    meterNode = useRef<AudioWorkletNode | null>(null),
+    vosk = useRef<Model | null>(null),
+    onSamples = useRef<((samples: Float32Array) => void) | null>(null),
     running = useRef(false),
     active = useRef(true),
     run = useRef(0),
@@ -63,6 +78,10 @@ export function Audio({
       recognition.current.stop();
     }
     recognition.current = null;
+    onSamples.current = null;
+    vosk.current?.terminate();
+    vosk.current = null;
+    meterNode.current = null;
     stream.current?.getTracks().forEach((t) => t.stop());
     stream.current = null;
     void context.current?.close().catch(() => {});
@@ -130,7 +149,7 @@ export function Audio({
       stream.current = media;
       const audio = new AudioContext();
       context.current = audio;
-      await audio.audioWorklet.addModule("/audio-worklet.js");
+      await audio.audioWorklet.addModule(workletUrl);
       if (!active.current || run.current !== current) {
         media.getTracks().forEach((t) => t.stop());
         void audio.close();
@@ -141,9 +160,11 @@ export function Audio({
       gain.gain.value = 0;
       audio.createMediaStreamSource(media).connect(meter);
       meter.connect(gain).connect(audio.destination);
+      meterNode.current = meter;
       meter.port.onmessage = (e) => {
-        if (active.current && running.current)
-          setLevel(Math.min(1, Math.sqrt(e.data.level) * 2));
+        if (!active.current || !running.current) return;
+        if (e.data.samples) onSamples.current?.(e.data.samples);
+        else setLevel(Math.min(1, Math.sqrt(e.data.level) * 2));
       };
       await audio.resume();
       if (!active.current || run.current !== current) {
@@ -175,10 +196,17 @@ export function Audio({
   }
   async function enableVoice() {
     setError("");
-    if (phrase.trim().length < 5) {
+    if (normalizePhrase(phrase).length < 5) {
       setError("Choose a phrase with at least 5 characters.");
       return;
     }
+    const current = run.current;
+    setVoiceStatus("Checking…");
+    if (!(await startBrowserRecognizer(current)))
+      if (running.current && run.current === current) await startVosk(current);
+  }
+  // Chrome's on-device recognizer. Returns false when unavailable so the offline Vosk model can take over.
+  async function startBrowserRecognizer(current: number) {
     const Ctor =
       (
         window as Window & {
@@ -188,28 +216,18 @@ export function Audio({
       ).SpeechRecognition ||
       (window as Window & { webkitSpeechRecognition?: RecognitionConstructor })
         .webkitSpeechRecognition;
-    if (!Ctor?.available) {
-      setVoiceStatus("Unavailable");
-      setError(
-        "This browser cannot verify on-device recognition support. No speech recognition was started. Use the phrase simulation.",
-      );
-      return;
-    }
-    const current = run.current;
+    if (!Ctor?.available) return false;
+    const options = { langs: ["en-US"], processLocally: true };
     try {
       const r = new Ctor();
-      if (
-        !("processLocally" in r) ||
-        (await Ctor.available({ langs: ["en-US"], processLocally: true })) !==
-          "available"
-      ) {
-        setVoiceStatus("Unavailable");
-        setError(
-          "An on-device English recognition pack is unavailable. Remote speech recognition is never used.",
-        );
-        return;
-      }
-      if (!running.current || run.current !== current) return;
+      if (!("processLocally" in r)) return false;
+      const status = await Ctor.available(options);
+      if (status === "downloadable" || status === "downloading") {
+        if (!Ctor.install || run.current !== current) return false;
+        setVoiceStatus("Installing Chrome’s on-device speech pack…");
+        if (!(await Ctor.install(options))) return false;
+      } else if (status !== "available") return false;
+      if (!running.current || run.current !== current) return true;
       r.processLocally = true;
       r.lang = "en-US";
       r.continuous = true;
@@ -246,11 +264,69 @@ export function Audio({
         }
       };
       r.start();
-      setVoiceStatus("On-device · experimental");
+      setVoiceStatus("On-device (browser) · experimental");
+      return true;
     } catch {
+      recognition.current = null;
+      return false;
+    }
+  }
+  // Vosk: free, open-source (Apache-2.0) recognizer running in a Web Worker. Audio never leaves the page.
+  async function startVosk(current: number) {
+    const unavailable = (message: string) => {
+      if (run.current !== current) return;
+      vosk.current?.terminate();
+      vosk.current = null;
+      onSamples.current = null;
       setVoiceStatus("Unavailable");
-      setError(
-        "On-device recognition could not start. No remote fallback is enabled.",
+      setError(message);
+    };
+    setVoiceStatus("Loading offline voice model…");
+    // Missing files fall back to index.html; offline, rely on the copy Vosk keeps in IndexedDB.
+    const head = await fetch(VOSK_MODEL_URL, { method: "HEAD" }).catch(
+      () => null,
+    );
+    if (head && (!head.ok || head.headers.get("content-type")?.includes("html")))
+      return unavailable(
+        "The offline voice model is not installed on this server. Run npm run voice:model, then rebuild. Use the phrase simulation meanwhile.",
+      );
+    try {
+      const { Model } = await import("vosk-browser");
+      if (run.current !== current) return;
+      const model = new Model(VOSK_MODEL_URL);
+      vosk.current = model;
+      await new Promise<void>((resolve, reject) => {
+        model.on("load", (m) =>
+          m.event === "load" && m.result ? resolve() : reject(),
+        );
+        model.on("error", reject);
+      });
+      const sampleRate = context.current?.sampleRate;
+      if (!running.current || run.current !== current || !sampleRate) return;
+      // A grammar limits output to the phrase or "[unk]", which suits a wake phrase.
+      const recognizer = new model.KaldiRecognizer(
+        sampleRate,
+        JSON.stringify([normalizePhrase(phrase), "[unk]"]),
+      );
+      recognizer.setWords(true);
+      recognizer.on("result", (m) => {
+        if (m.event !== "result") return;
+        const words = m.result.result ?? [];
+        const confidence = words.length
+          ? Math.min(...words.map((w) => w.conf))
+          : 0;
+        if (matchesPhrase(m.result.text, phrase, confidence))
+          trigger("phrase", "Offline phrase recognized");
+      });
+      recognizer.on("error", () =>
+        unavailable("Offline phrase recognition stopped unexpectedly."),
+      );
+      onSamples.current = (s) => recognizer.acceptWaveformFloat(s, sampleRate);
+      meterNode.current?.port.postMessage({ forward: true });
+      setVoiceStatus("Offline (Vosk) · experimental");
+    } catch {
+      unavailable(
+        "The offline voice model could not load. Check the connection for the first download (about 41 MB), then try again.",
       );
     }
   }
@@ -291,14 +367,19 @@ export function Audio({
                 <i
                   key={i}
                   style={{
-                    height:
-                      (listening
-                        ? 7 +
-                          level *
-                            60 *
-                            (0.25 +
-                              0.75 * Math.abs(Math.sin(i * 1.4 + level * 5)))
-                        : 5 + Math.abs(Math.sin(i * 1.4)) * 6) + "px",
+                    // Bars are a fixed 67px; clipping (paint only, no layout) shows the level with rounded ends.
+                    clipPath: `inset(${
+                      (67 -
+                        (listening
+                          ? 7 +
+                            level *
+                              60 *
+                              (0.25 +
+                                0.75 *
+                                  Math.abs(Math.sin(i * 1.4 + level * 5)))
+                          : 5 + Math.abs(Math.sin(i * 1.4)) * 6)) /
+                      2
+                    }px 0 round 2px)`,
                   }}
                 />
               ))}
@@ -346,25 +427,29 @@ export function Audio({
                 value={phrase}
                 maxLength={60}
                 minLength={5}
-                disabled={voiceStatus.startsWith("On-device")}
+                disabled={!VOICE_IDLE.includes(voiceStatus)}
                 onChange={(e) => setPhrase(e.target.value)}
               />
             </label>
             <div className="row wrap">
               <button
                 className="button secondary"
-                disabled={!listening || voiceStatus.startsWith("On-device")}
+                disabled={!listening || !VOICE_IDLE.includes(voiceStatus)}
                 onClick={enableVoice}
               >
                 <MessageCircle size={16} />
                 Enable local phrase recognition
               </button>
-              <span className="small-text muted">{voiceStatus}</span>
+              <span className="small-text muted" role="status">
+                {voiceStatus}
+              </span>
             </div>
             <p className="small-text">
-              Uses only a browser-confirmed on-device English recognizer, if
-              available. The experimental confidence threshold is 0.75; it has
-              not been calibrated across speakers.
+              Uses Chrome’s on-device English recognizer when available,
+              otherwise a free offline Vosk model (about 41 MB, downloaded
+              once). Audio never leaves this device. Use everyday English
+              words; “ResQ” is heard as “rescue”. The experimental confidence
+              threshold is 0.75; it has not been calibrated across speakers.
             </p>
           </div>
         </section>

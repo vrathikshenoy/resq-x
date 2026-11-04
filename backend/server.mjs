@@ -207,16 +207,19 @@ export function createApp(featureHandler = handleFeature) {
       } catch {
         file = resolve(root, "index.html");
       }
-      const bytes = await readFile(file);
+      // HEAD skips the read: the voice model is ~41 MB.
+      const bytes = method === "HEAD" ? undefined : await readFile(file);
+      // ponytail: 'unsafe-eval' + blob: workers are required by the offline Vosk voice worker (Emscripten embind uses new Function).
+      // A worker loaded from its own URL with a separate CSP would let the page drop 'unsafe-eval'.
       res.setHeader(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https://tile.openstreetmap.org; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "default-src 'self'; script-src 'self' 'unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: https://tile.openstreetmap.org; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
       );
       res.writeHead(200, {
         "Content-Type": mime[extname(file)] || "application/octet-stream",
         "Cache-Control": file.endsWith("sw.js") ? "no-cache" : "no-cache",
       });
-      res.end(method === "HEAD" ? undefined : bytes);
+      res.end(bytes);
     } catch (error) {
       json(res, error.status || 500, {
         error: error.status

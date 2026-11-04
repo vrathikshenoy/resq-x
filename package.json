@@ -18,12 +18,14 @@
     "native:android": "npx --no-install cap open android",
     "native:ios": "npx --no-install cap open ios",
     "test:live": "node scripts/check-live-routing.mjs",
-    "test:ui": "node scripts/test-ui.mjs"
+    "test:ui": "node scripts/test-ui.mjs",
+    "voice:model": "node scripts/fetch-voice-model.mjs"
   },
   "dependencies": {
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "lucide-react": "0.454.0"
+    "lucide-react": "0.454.0",
+    "vosk-browser": "0.0.8"
   },
   "devDependencies": {
     "@types/react": "19.1.2",

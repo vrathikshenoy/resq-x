@@ -6,11 +6,12 @@ A mobile-first personal safety and digital privacy prototype, implemented from t
 
 ## Run
 
-Requires Node **22.13+** (Node 24 LTS recommended) and npm. No backend packages, API keys, paid services, Python environment, or model downloads are needed.
+Requires Node **22.13+** (Node 24 LTS recommended) and npm. No backend packages, API keys, paid services or Python environment are needed. The offline voice model is an optional, free one-time download.
 
 ```sh
 cd "/mnt/ssd/New Folder/resq-x"
 npm install
+npm run voice:model   # optional: free offline wake-phrase model (~41 MB) into public/models/
 npm run dev
 ```
 
@@ -37,7 +38,7 @@ Dependencies already present on this machine were reused for the build because p
 | RouteShield      | Live OSM tiles, GPS/map-picked endpoints, Overpass street graphs, Dijkstra shortest/weighted paths, inspectable street tags and fetch timestamp     | Offline graph is fictional. Live OSM depends on network and incomplete tags; weights do not establish safety                               |
 | DeepCloak        | Local image validation, orientation-aware browser decoding, preview, bounded ±8 channel changes, metadata-free PNG export, measured PSNR            | Random perturbation simulation; no face detection/model, PGD/EOT, embeddings or measured model protection                                  |
 | TrackShield      | Native foreground BluetoothLe plugin adapter and supported-browser advertisement scans, signal history, local trust list and RSSI calibration       | Three-second demo scans always available. Repeated detection rule uses self-reported movement; no directional radar or stalking conclusion |
-| Audio Trigger    | Explicit microphone permission, AudioWorklet volume meter, 1.5-second RAM buffer, optional strictly on-device English speech recognition            | No trained KWS/scream model. Phrase/scream simulations are available without a mic. No remote speech fallback                              |
+| Audio Trigger    | Explicit microphone permission, AudioWorklet volume meter, 1.5-second RAM buffer, wake phrase via Chrome's on-device recognizer or free offline Vosk | Phrase accuracy uncalibrated. No trained scream model. Phrase/scream simulations work without a mic. No cloud speech service is ever used    |
 | PWA              | Standalone manifest, maskable icons, versioned offline app shell, responsive safe-area navigation                                                   | Visit once online. Photos, route demos and BLE demos work offline; contacts and alerts require the server                                  |
 | Native packaging | Capacitor config and Android/iOS setup instructions                                                                                                 | Native BLE adapter requires installing the documented plugin and rebuilding; no native binary or background sensor implementation          |
 
@@ -49,7 +50,7 @@ Dependencies already present on this machine were reused for the build because p
 4. Open **RouteShield**. **Live OSM data** is the default online. Use **Use my location** or **Set start on map**, then **Set destination on map** (or enter coordinates). Choose **Compare walking routes** for locations within 3 km. Inspect shortest/weighted alternatives, lighting tags and the real-data timestamp. **Offline demo** is an explicit sample mode; live failure never returns fabricated data.
 5. Open **DeepCloak**, choose a file or sample illustration, confirm permission, and run the simulation. Compare and download the result. Metrics refer to pixel changes against the resized input, not face-model effectiveness.
 6. Open **TrackShield**. Real scanning is the default. A native build with the BluetoothLe plugin, or a browser exposing BLE advertisement scanning, requests permission when you press **Start foreground scan**. Unsupported browsers show the limitation and no devices. To rehearse without hardware, select **Optional sample** explicitly; repeat three scans with movement marked twice.
-7. Open **Audio Trigger** and rehearse a phrase/scream trigger. A real microphone is optional. Local phrase recognition only starts if the browser explicitly reports an installed on-device English recognizer.
+7. Open **Audio Trigger** and rehearse a phrase/scream trigger. A real microphone is optional. To try the real wake phrase, choose **Enable foreground microphone**, then **Enable local phrase recognition**, and say the phrase. See [Audio Trigger: how it works](#audio-trigger-how-it-works).
 
 On mobile, Home shows all four tools. **More** opens Settings with direct links to every module and the trusted circle.
 
@@ -60,7 +61,7 @@ On mobile, Home shows all four tools. **More** opens Settings with direct links 
 - SQLite at `data/resq-x.sqlite`, created automatically. Back up the database with SQLite’s backup tooling; do not copy a live WAL database without its WAL state.
 - Shared pure routing code in `shared/routing.mjs` powers both offline demos and backend calculations.
 - Browser-only photo processing. Nothing about your photo reaches the server.
-- Foreground audio analysis in `public/audio-worklet.js`. No raw audio crosses the worklet boundary or reaches the API.
+- Foreground audio analysis in `src/lib/audio-worklet.js` (bundled by Vite with `src/lib/audio-core.mjs`). Raw audio leaves the worklet only for the in-page offline recognizer, and never reaches the API.
 
 The PDF suggests FastAPI/PostgreSQL. Node/SQLite was selected here because FastAPI could not be downloaded and a single-process local demonstration does not need a separate database service. The documented HTTP feature boundaries remain small and authenticated.
 
@@ -92,10 +93,50 @@ Lighting is `1` for a lit tag, `0` for explicitly unlit, and `0.5` for unknown. 
 
 Live requests use a primary Overpass endpoint and one bounded failover endpoint for transient failures, at most 3 km between endpoints, a bounded area, response/time/graph-size limits and a one-hour in-memory cache of up to ten public street graphs. Endpoint connectors are not turn-by-turn directions. The live map loads real OpenStreetMap raster tiles and overlays returned route geometry in Web Mercator. It supports pan, zoom, GPS and selecting start/destination points. Tiles follow normal browser caching; there is no offline tile download or prefetch. Failed tiles are reported while route geometry remains visible. OSM attribution links to its copyright page.
 
+### Audio Trigger: how it works
+
+Everything runs on your device, while the Audio Trigger screen is open. No paid or cloud speech service is used.
+
+```
+microphone ─▶ AudioWorklet (src/lib/audio-worklet.js)
+                ├─ volume level, 10×/s ─────────────▶ meter bars (display only)
+                ├─ 1.5 s circular buffer in RAM (overwritten, never stored)
+                └─ 4096-sample chunks, only after offline phrase recognition is enabled
+                                                    ─▶ Vosk Web Worker ─▶ text + per-word confidence
+Chrome on-device recognizer (if installed) ─────────▶ text + confidence
+                                                      │
+                     matchesPhrase(): whole phrase, confidence ≥ 0.75
+                                                      ▼
+                     10-second cancellable SOS countdown ─▶ simulated alert
+```
+
+1. **Enable foreground microphone** asks for microphone permission and starts the volume meter. Volume alone never triggers an SOS.
+2. **Enable local phrase recognition** chooses an engine in this order:
+   - **Chrome's on-device recognizer.** It is used when the browser reports that its English pack is installed. If Chrome reports that the pack can be downloaded, the app asks Chrome to install it first. Chrome's cloud recognizer is never used.
+   - **Vosk (fallback).** This is a free, open-source (Apache-2.0) speech recognizer compiled to WebAssembly (the `vosk-browser` package). It runs in a Web Worker in every modern browser, including Safari. The ~41 MB English model is served from this app's own origin (`/models/…`). The first use downloads it once. Vosk then keeps it in IndexedDB, so later starts are fast and work offline. The recognizer only listens for your phrase (a grammar of `[phrase, "[unk]"]`), and **every word** must score at least 0.75 confidence.
+3. When the whole phrase matches, the shared SOS countdown starts. A 30-second cooldown prevents repeated triggers. Leaving the screen, hiding the app or triggering an SOS stops the microphone and terminates the Vosk worker.
+
+**Choosing a phrase.** Use common English words. Brand spellings are normalized, so "ResQ" is matched as "rescue" (the default phrase "Hey ResQ help" is recognized as "hey rescue help"). Vosk cannot recognize words outside its vocabulary, so a phrase containing made-up words will never match.
+
+**Setting up the offline model.**
+
+```sh
+npm run voice:model   # downloads public/models/vosk-model-small-en-us-0.15.tar.gz (git-ignored)
+npm run build         # copies it into dist/models/
+```
+
+If the model file is missing, the app says so and keeps working with the simulations. To host the model elsewhere, set `VITE_VOSK_MODEL_URL` at build time. That host must send CORS headers, and you must add it to the server's `connect-src` CSP.
+
+**Security trade-off.** The Vosk worker is Emscripten code that calls `new Function`. The page Content-Security-Policy therefore includes `script-src 'self' 'unsafe-eval'` and `worker-src 'self' blob:`. Scripts are still limited to this origin. To remove `'unsafe-eval'`, serve the Vosk worker from its own URL with a separate policy.
+
+**Scream detection** remains a labelled simulation. A free on-device option for later is MediaPipe's Audio Classifier (YAMNet), which has a "Screaming" class.
+
+**Limits.** Accuracy has not been measured across speakers, accents or noise. Random noise can make the grammar output a single phrase word (for example, "hey"), which is why the full phrase and per-word confidence are required. Foreground only: locked-screen or background listening needs a native plugin.
+
 ## Privacy and deployment
 
 - Permissions are requested only for the enabled operation. Hiding/leaving the page stops microphone/BLE activity and cancels a pending SOS countdown.
-- No raw audio, photo, route history or GPS track is stored. Alert coordinates are retained only when you explicitly include them.
+- No raw audio, photo, route history or GPS track is stored. Speech recognition runs on the device; only the downloaded Vosk model (not audio) is kept in IndexedDB. Alert coordinates are retained only when you explicitly include them.
 - Scan history is limited to 25 devices / 30 readings each and retained in memory across section changes. It is discarded on explicit clearing, sign-out or page reload. Trusted-device IDs persist locally per account. Browser site-data controls can clear them.
 - Contacts and alert records persist on the server. Sign-out invalidates the current session; it does not delete your account data.
 - The service worker caches only the public app shell, never API responses or private account data.
@@ -145,6 +186,8 @@ npm run test:e2e
 ```
 
 **Verified here:** eighteen test groups pass, covering authentication, origin/content-type/object validation, account isolation, contact edits/verification/duplicates, alert idempotency and location input, route scoring/disconnection/access, photo perturbation bounds and file signatures, tracking persistence/trust/bounded history, audio buffer/phrase matching, and actual backend entry-point initialization, occupied-port error handling and dynamic development proxy wiring and preserved browser-host origin validation, live-OSM response normalization/cache/failure behavior, map projection, native/browser BLE lifecycle, and real React DOM navigation state retention with sensor shutdown and logout cleanup (with external responses, image/audio APIs, hardware and socket binding stubbed). TypeScript checking and the Vite production build pass. PWA build emits a versioned offline cache.
+
+**Offline voice check (2026-11-04):** with `npm start`, headless Chromium loaded the Vosk model from `/models/` under the production CSP in under a second. It created a phrase-grammar recognizer and accepted audio chunks. A missing model file was detected (served as `text/html`). No real speech was tested: no microphone or speech synthesizer was available, so recognition accuracy is unmeasured.
 
 **Not verified here:** real HTTP/browser end-to-end operation, visual layout, service-worker offline reload, microphone/BLE/GPS hardware, live Overpass requests, clean dependency installation and Android/iOS builds. The execution sandbox rejects local listening sockets and Chromium launch. The connected-browser check also timed out. `tests/browser.mjs` supplies a repeatable end-to-end flow including contacts, countdown cancel/confirmation, image download, route/tracker/audio demos, mobile overflow and offline routing; it was not successfully run here.
 

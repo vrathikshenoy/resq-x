@@ -1969,9 +1969,9 @@ th {
 .audio-bars i {
   display: block;
   width: 4px;
+  height: 67px;
   background: #dbd0bb;
-  border-radius: 5px;
-  transition: height 0.1s;
+  transition: clip-path 0.1s;
 }
 .listening .audio-bars i {
   background: #6aaf96;
