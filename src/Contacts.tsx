@@ -9,6 +9,8 @@ import {
   History,
   X,
   LifeBuoy,
+  Send,
+  Copy,
 } from "lucide-react";
 import { api } from "./api";
 export type Contact = {
@@ -17,6 +19,7 @@ export type Contact = {
   phone: string;
   relation: string;
   verified: number;
+  telegram: number;
 };
 export type AlertRecord = {
   id: string;
@@ -25,8 +28,16 @@ export type AlertRecord = {
   status: string;
   latitude: number | null;
   longitude: number | null;
-  recipients: { name: string; status: string }[];
+  recipients: { name: string; status: string; channel?: string; error?: string }[];
+  simulation?: boolean;
 };
+// One honest label per recipient: real Telegram delivery, failure, or demo simulation.
+export const deliveryLabel = (r: AlertRecord["recipients"][number]) =>
+  r.status === "sent"
+    ? `${r.name}: sent on Telegram`
+    : r.status === "failed"
+      ? `${r.name}: Telegram failed${r.error ? " (" + r.error + ")" : ""}`
+      : `${r.name}: simulated, nothing sent`;
 export function Contacts({
   contacts,
   refresh,
@@ -43,7 +54,11 @@ export function Contacts({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [alerts, setAlerts] = useState<AlertRecord[]>([]),
-    [removing, setRemoving] = useState<string | null>(null);
+    [removing, setRemoving] = useState<string | null>(null),
+    [invite, setInvite] = useState<{ id: string; link: string } | null>(
+      null,
+    ),
+    [copied, setCopied] = useState(false);
   useEffect(() => {
     api<AlertRecord[]>("/alerts")
       .then(setAlerts)
@@ -97,10 +112,15 @@ export function Contacts({
                   <span
                     className={"verification " + (c.verified ? "verified" : "")}
                   >
-                    {c.verified ? (
+                    {c.telegram ? (
                       <>
                         <Check size={12} />
-                        Verified in simulation
+                        Joined on Telegram · receives real alerts
+                      </>
+                    ) : c.verified ? (
+                      <>
+                        <Check size={12} />
+                        Verified in simulation · no real alerts
                       </>
                     ) : (
                       "Not verified"
@@ -126,9 +146,27 @@ export function Contacts({
                 >
                   <Trash2 size={15} />
                 </button>
-                {!c.verified && (
+                {!c.telegram && (
                   <button
                     className="text-button verify-button"
+                    disabled={busy}
+                    onClick={() =>
+                      perform(async () => {
+                        const { link } = await api<{ link: string }>(
+                          "/contacts/" + c.id + "/telegram",
+                          {},
+                        );
+                        setCopied(false);
+                        setInvite({ id: c.id, link });
+                      })
+                    }
+                  >
+                    Invite on Telegram <Send size={13} />
+                  </button>
+                )}
+                {!c.verified && (
+                  <button
+                    className="text-button"
                     disabled={busy}
                     onClick={() =>
                       perform(() =>
@@ -142,6 +180,48 @@ export function Contacts({
                   >
                     Simulate verification <Check size={13} />
                   </button>
+                )}
+                {invite?.id === c.id && (
+                  <div className="invite-panel">
+                    <span>
+                      Send this link to {c.name}. When they open it and tap
+                      <strong> Start</strong> in Telegram, they join your circle
+                      and will get your real SOS alerts. It works once and
+                      expires in 7 days.
+                    </span>
+                    <input
+                      readOnly
+                      value={invite.link}
+                      aria-label={"Telegram invite link for " + c.name}
+                      onFocus={(e) => e.currentTarget.select()}
+                    />
+                    <button
+                      className="button secondary"
+                      onClick={async () => {
+                        try {
+                          if (navigator.share)
+                            await navigator.share({
+                              title: "Join my RESQ-X trusted circle",
+                              url: invite.link,
+                            });
+                          else {
+                            await navigator.clipboard.writeText(invite.link);
+                            setCopied(true);
+                          }
+                        } catch {}
+                      }}
+                    >
+                      <Copy size={14} />
+                      {copied ? "Copied" : "Share link"}
+                    </button>
+                    <button
+                      className="text-button"
+                      disabled={busy}
+                      onClick={() => perform(async () => setInvite(null))}
+                    >
+                      Done, check status
+                    </button>
+                  </div>
                 )}
                 {removing === c.id && (
                   <div className="remove-confirm">
@@ -250,7 +330,7 @@ export function Contacts({
         </section>
         <section className="card">
           <div className="section-title">
-            <h2>Test alert history</h2>
+            <h2>Alert history</h2>
             <History size={19} />
           </div>
           {alerts.length === 0 ? (
@@ -264,12 +344,12 @@ export function Contacts({
                   <Check size={16} />
                 </span>
                 <div>
-                  <strong>Simulated {a.type} alert</strong>
+                  <strong>
+                    {a.simulation ? "Simulated " : ""}
+                    {a.type} alert
+                  </strong>
                   <small>{new Date(a.created).toLocaleString()}</small>
-                  <p>
-                    Mock delivery to{" "}
-                    {a.recipients.map((r) => r.name).join(", ")}. No SMS sent.
-                  </p>
+                  <p>{a.recipients.map(deliveryLabel).join(" · ")}</p>
                   {a.latitude !== null ? (
                     <a
                       href={`https://www.openstreetmap.org/?mlat=${a.latitude}&mlon=${a.longitude}#map=17/${a.latitude}/${a.longitude}`}
@@ -295,19 +375,20 @@ export function Contacts({
           <h2 style={{ marginTop: 20 }}>A quick rehearsal helps.</h2>
           <p className="small-text">
             An alert starts a 10-second countdown. You can cancel before it
-            finishes. After that, the backend records a mock message for each
-            verified demo contact.
+            finishes. Contacts who joined on Telegram then get a real message;
+            contacts verified only in simulation get nothing.
           </p>
           <button className="button danger full" onClick={onSOS}>
             <LifeBuoy size={17} />
-            Practice an SOS
+            Start an SOS
           </button>
         </section>
         <div className="notice warning">
-          <strong>Verification is simulated.</strong>
+          <strong>Real alerts use Telegram (free).</strong>
           <br />
-          No code or SMS is sent. Verification and alert delivery must be
-          connected to a real messaging provider before real-world use.
+          Invite each contact on Telegram so they consent and can receive
+          alerts. "Simulate verification" is for demos and sends nothing.
+          After any SOS you can also text your contacts by SMS or call 112.
         </div>
         <section className="card">
           <h3>Keep your circle current</h3>

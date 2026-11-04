@@ -2,7 +2,7 @@
 
 A mobile-first personal safety and digital privacy prototype, implemented from the 13-page `../Documentation.pdf`. Install it as a PWA, or package the hosted app in an Android/iOS Capacitor wrapper.
 
-**This is a demonstration, not an emergency service. All SMS and contact verification are simulated.**
+**This is a prototype, not an emergency service.** Real SOS alerts go only to contacts who joined through Telegram. Contacts verified with **Simulate verification** receive nothing. In an emergency, call 112.
 
 ## Run
 
@@ -11,7 +11,7 @@ Requires Node **22.13+** (Node 24 LTS recommended) and npm. No backend packages,
 ```sh
 cd "/mnt/ssd/New Folder/resq-x"
 npm install
-npm run voice:model   # optional: free offline wake-phrase model (~41 MB) into public/models/
+npm run voice:model   # optional: free on-device audio models (Vosk ~41 MB, YAMNet ~4 MB) into public/models/
 npm run dev
 ```
 
@@ -33,24 +33,24 @@ Dependencies already present on this machine were reused for the build because p
 | Feature          | Working behavior                                                                                                                                    | Simulation / limit                                                                                                                         |
 | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Foundation       | Responsive app shell, registration/login/logout, private demo sessions, persistent SQLite, PBKDF2 passwords, expiring HttpOnly cookie sessions      | No email verification or password recovery; single-server prototype                                                                        |
-| Trusted circle   | Add, edit, remove and validate up to 10 international-format contacts; changing a number resets verification                                        | Verification explicitly simulated; contact consent must be obtained separately                                                             |
-| SOS              | Ten-second cancellable dialog, optional location requested afterward, idempotent server requests, per-contact results, account-scoped alert history | Mock delivery only. No actual SMS, calls, push notifications or emergency dispatch                                                         |
+| Trusted circle   | Add, edit, remove and validate up to 10 international-format contacts. Real verification: the contact opens a Telegram invite and taps Start (consent) | Demo **Simulate verification** remains and sends nothing. Changing a number resets verification and the Telegram link                       |
+| SOS              | Ten-second cancellable dialog, optional location, real Telegram messages with per-contact sent/failed status, pre-filled SMS fallback, Call 112       | Free Telegram bot needs `TELEGRAM_BOT_TOKEN`. SMS is sent by the user from their phone. No emergency dispatch integration                   |
 | RouteShield      | Live OSM tiles, GPS/map-picked endpoints, Overpass street graphs, Dijkstra shortest/weighted paths, inspectable street tags and fetch timestamp     | Offline graph is fictional. Live OSM depends on network and incomplete tags; weights do not establish safety                               |
 | DeepCloak        | Local image validation, orientation-aware browser decoding, preview, bounded ±8 channel changes, metadata-free PNG export, measured PSNR            | Random perturbation simulation; no face detection/model, PGD/EOT, embeddings or measured model protection                                  |
-| TrackShield      | Native foreground BluetoothLe plugin adapter and supported-browser advertisement scans, signal history, local trust list and RSSI calibration       | Three-second demo scans always available. Repeated detection rule uses self-reported movement; no directional radar or stalking conclusion |
-| Audio Trigger    | Explicit microphone permission, AudioWorklet volume meter, 1.5-second RAM buffer, wake phrase via Chrome's on-device recognizer or free offline Vosk | Phrase accuracy uncalibrated. No trained scream model. Phrase/scream simulations work without a mic. No cloud speech service is ever used    |
+| TrackShield      | Native BluetoothLe and supported-browser advertisement scans, signal history, trust list, RSSI calibration, identification of AirTag/Find My, Google Find Hub, SmartTag, Tile and standard (DULT) trackers | Foreground only. Sample mode is optional and labelled. No directional radar; an identified tracker is not proof of stalking |
+| Audio Trigger    | Explicit microphone permission, AudioWorklet meter, wake phrase (Chrome on-device or free offline Vosk), scream detection (free on-device YAMNet)    | Phrase and scream thresholds uncalibrated. Simulations work without a mic. No audio ever leaves the device                                   |
 | PWA              | Standalone manifest, maskable icons, versioned offline app shell, responsive safe-area navigation                                                   | Visit once online. Photos, route demos and BLE demos work offline; contacts and alerts require the server                                  |
 | Native packaging | Capacitor config and Android/iOS setup instructions                                                                                                 | Native BLE adapter requires installing the documented plugin and rebuilding; no native binary or background sensor implementation          |
 
 ## A five-minute walkthrough
 
 1. Choose **Try the demo** and open **Set up my safety circle**.
-2. Add a contact using an international number (for example `+15550102001`) and choose **Simulate verification**. No messages are sent.
-3. Choose **Practice an SOS**, cancel once, then try again and let the countdown complete. Inspect the test alert history. Location is optional and permission denial does not block the mock alert.
+2. Add a contact using an international number (for example `+15550102001`). Choose **Invite on Telegram** for real alerts (see [SOS alerts](#sos-alerts-how-they-work)), or **Simulate verification** for a demo that sends nothing.
+3. Choose **Start an SOS**, cancel once, then try again and let the countdown complete. The dialog says up front whether the alert is real (Telegram contacts) or practice. Afterwards, inspect each contact's delivery status in the alert history. Location is optional, and denying permission does not block the alert.
 4. Open **RouteShield**. **Live OSM data** is the default online. Use **Use my location** or **Set start on map**, then **Set destination on map** (or enter coordinates). Choose **Compare walking routes** for locations within 3 km. Inspect shortest/weighted alternatives, lighting tags and the real-data timestamp. **Offline demo** is an explicit sample mode; live failure never returns fabricated data.
 5. Open **DeepCloak**, choose a file or sample illustration, confirm permission, and run the simulation. Compare and download the result. Metrics refer to pixel changes against the resized input, not face-model effectiveness.
-6. Open **TrackShield**. Real scanning is the default. A native build with the BluetoothLe plugin, or a browser exposing BLE advertisement scanning, requests permission when you press **Start foreground scan**. Unsupported browsers show the limitation and no devices. To rehearse without hardware, select **Optional sample** explicitly; repeat three scans with movement marked twice.
-7. Open **Audio Trigger** and rehearse a phrase/scream trigger. A real microphone is optional. To try the real wake phrase, choose **Enable foreground microphone**, then **Enable local phrase recognition**, and say the phrase. See [Audio Trigger: how it works](#audio-trigger-how-it-works).
+6. Open **TrackShield**. Real scanning is the default. A native build with the BluetoothLe plugin, or a browser exposing BLE advertisement scanning, requests permission when you press **Start foreground scan**. Unsupported browsers show the limitation and no devices. To rehearse without hardware, select **Optional sample** explicitly. Its "Unfamiliar sample tag" acts as a separated Find My tracker, so two scans with movement marked once raise a warning. See [TrackShield: tracker identification](#trackshield-tracker-identification).
+7. Open **Audio Trigger** and rehearse a phrase/scream trigger. A real microphone is optional. To try the real detectors, choose **Enable foreground microphone**, then **Enable local phrase recognition** and/or **Enable scream detection**. See [Audio Trigger: how it works](#audio-trigger-how-it-works).
 
 On mobile, Home shows all four tools. **More** opens Settings with direct links to every module and the trusted circle.
 
@@ -71,15 +71,16 @@ All feature endpoints require the session cookie. JSON requests are limited to 1
 
 | Method               | Endpoint                                 | Purpose                                                                                                |
 | -------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| GET                  | `/health`                                | Process/database status; SMS mode                                                                      |
+| GET                  | `/health`                                | Process/database status; `alerts` is `telegram` or `simulation`                                        |
 | POST                 | `/api/v1/auth/register`                  | `{name,email,password}`                                                                                |
 | POST                 | `/api/v1/auth/login`                     | `{email,password}`                                                                                     |
 | POST                 | `/api/v1/auth/demo`                      | Creates an isolated demo session                                                                       |
 | GET / POST           | `/api/v1/auth/me`, `/api/v1/auth/logout` | Current account / end session                                                                          |
 | GET / POST           | `/api/v1/contacts`                       | List / add `{name,phone,relation}`                                                                     |
 | PUT / PATCH / DELETE | `/api/v1/contacts/:id`                   | Edit / `{verify_simulation:true}` / remove                                                             |
+| POST                 | `/api/v1/contacts/:id/telegram`          | `{}` → `{link}`: one-time Telegram invite (7 days); 503 when no bot token is configured                |
 | POST                 | `/api/v1/alerts/trigger`                 | `{request_id,type,location}`; type is manual/phrase/scream; location is null or `{latitude,longitude}` |
-| GET                  | `/api/v1/alerts`                         | Latest 50 alerts with explicitly simulated delivery results                                            |
+| GET                  | `/api/v1/alerts`                         | Latest 50 alerts; each recipient has `channel` (telegram/simulation) and `status` (sent/failed/simulated) |
 | GET                  | `/api/v1/navigation/places`              | Fictional demo locations                                                                               |
 | POST                 | `/api/v1/navigation/route`               | `{mode:"demo",origin:"0",destination:"15"}` or `{mode:"live",origin:[lat,lon],destination:[lat,lon]}`  |
 
@@ -93,12 +94,52 @@ Lighting is `1` for a lit tag, `0` for explicitly unlit, and `0.5` for unknown. 
 
 Live requests use a primary Overpass endpoint and one bounded failover endpoint for transient failures, at most 3 km between endpoints, a bounded area, response/time/graph-size limits and a one-hour in-memory cache of up to ten public street graphs. Endpoint connectors are not turn-by-turn directions. The live map loads real OpenStreetMap raster tiles and overlays returned route geometry in Web Mercator. It supports pan, zoom, GPS and selecting start/destination points. Tiles follow normal browser caching; there is no offline tile download or prefetch. Failed tiles are reported while route geometry remains visible. OSM attribution links to its copyright page.
 
+### TrackShield: tracker identification
+
+Each Bluetooth advertisement is checked for the broadcast formats that item trackers use (`identifyTracker` in `src/lib/ble.mjs`):
+
+| Tracker | Signal in the advertisement | "Away from owner" |
+|---|---|---|
+| Apple Find My (AirTag, Chipolo Spot, other Find My items) | Manufacturer data, company `0x004C`, type `0x12` | Length byte `0x19` (separated) vs `0x02` (near owner) |
+| Unwanted-tracking standard (DULT, Apple/Google) | Service UUID `0xFCB2` | Always (sent only while separated) |
+| Google Find Hub | Service data `0xFEAA`, frame `0x40`/`0x41` | Frame `0x41` |
+| Samsung SmartTag | Service data `0xFD5A` | Not reported |
+| Tile | Service UUID `0xFEED`/`0xFEEC` | Not reported |
+
+Identified trackers are listed first and labelled. A tracker that says it is away from its owner raises the "repeated detection" warning after **2 scan sessions with 1 movement**, instead of 3 sessions with 2 movements. A separated AirTag keeps its address for hours, while near its owner it rotates about every 15 minutes, so repeated sightings of a separated tracker are meaningful.
+
+**Limits.** Scanning works only while TrackShield is open. Browsers may hide some advertisement data. Address rotation can split one tracker into several entries. An identified tracker near you may belong to someone travelling with you, so the app shows evidence, not conclusions. Your phone's built-in unwanted-tracking alerts (iOS, and Android's "Unknown tracker alerts") remain the most reliable check.
+
+### SOS alerts: how they work
+
+Every path below is free.
+
+**1. Set up the Telegram bot (once, about 2 minutes).**
+
+1. In Telegram, message **@BotFather**, send `/newbot`, and choose a name and a username ending in `bot`.
+2. Put the token in `.env` or `.env.local` (both git-ignored) as `TELEGRAM_BOT_TOKEN=...`. Keep it secret.
+3. Restart `npm start` or `npm run dev`. Both read `.env` and `.env.local`, and log `Telegram alerts enabled`. Run only one of them at a time per bot token.
+
+The server long-polls Telegram's `getUpdates`, so it needs no public URL, webhook or HTTPS. It works on localhost.
+
+**2. Invite each contact.** In **Trusted circle**, choose **Invite on Telegram** and share the link (WhatsApp, SMS, anything). When your contact opens it and taps **Start**, the bot links their Telegram chat to that contact, marks them verified and confirms with a message. Tapping Start is their consent. They can send `/stop` at any time to leave every circle. Links work once and expire after 7 days. Changing the contact's phone number unlinks them.
+
+**3. On SOS**, after the 10-second countdown:
+
+- **Telegram:** each linked contact gets a message with your name, the trigger (button, phrase or scream) and an OpenStreetMap link if you shared your location. Each recipient is recorded as `sent` or `failed`, with the reason. A retry with the same alert ID never sends twice.
+- **SMS fallback:** **Also text them by SMS** opens your phone's messaging app with every contact and the message (plus location) filled in. You tap Send, and it uses your own SMS plan. This works with no server and no internet data.
+- **Call 112:** shown during the countdown and afterwards. During the countdown it sends the alert immediately and then opens the dialer, because leaving the app would otherwise cancel the countdown. 112 is India's and Europe's emergency number, and most mobile phones also route it to the local emergency service.
+
+Contacts verified with **Simulate verification** never receive anything. The dialog and alert history label them "simulated, nothing sent".
+
+**Limits.** Contacts need Telegram. The server must be running to send, but the SMS and 112 buttons work without it. Telegram limits bots to roughly 30 messages per second, far above 10 contacts. Automatic SMS without the user tapping Send would need a paid provider (Twilio, MSG91 with Indian DLT registration).
+
 ### Audio Trigger: how it works
 
 Everything runs on your device, while the Audio Trigger screen is open. No paid or cloud speech service is used.
 
 ```
-microphone ─▶ AudioWorklet (src/lib/audio-worklet.js)
+microphone ─▶ AudioWorklet (src/lib/audio-worklet.js)   [chunks also feed YAMNet scream detection]
                 ├─ volume level, 10×/s ─────────────▶ meter bars (display only)
                 ├─ 1.5 s circular buffer in RAM (overwritten, never stored)
                 └─ 4096-sample chunks, only after offline phrase recognition is enabled
@@ -107,7 +148,7 @@ Chrome on-device recognizer (if installed) ─────────▶ text +
                                                       │
                      matchesPhrase(): whole phrase, confidence ≥ 0.75
                                                       ▼
-                     10-second cancellable SOS countdown ─▶ simulated alert
+                     10-second cancellable SOS countdown ─▶ Telegram alert (or simulation)
 ```
 
 1. **Enable foreground microphone** asks for microphone permission and starts the volume meter. Volume alone never triggers an SOS.
@@ -121,7 +162,7 @@ Chrome on-device recognizer (if installed) ─────────▶ text +
 **Setting up the offline model.**
 
 ```sh
-npm run voice:model   # downloads public/models/vosk-model-small-en-us-0.15.tar.gz (git-ignored)
+npm run voice:model   # downloads Vosk and YAMNet into public/models/ (git-ignored)
 npm run build         # copies it into dist/models/
 ```
 
@@ -129,7 +170,9 @@ If the model file is missing, the app says so and keeps working with the simulat
 
 **Security trade-off.** The Vosk worker is Emscripten code that calls `new Function`. The page Content-Security-Policy therefore includes `script-src 'self' 'unsafe-eval'` and `worker-src 'self' blob:`. Scripts are still limited to this origin. To remove `'unsafe-eval'`, serve the Vosk worker from its own URL with a separate policy.
 
-**Scream detection** remains a labelled simulation. A free on-device option for later is MediaPipe's Audio Classifier (YAMNet), which has a "Screaming" class.
+**Scream detection.** **Enable scream detection** loads Google's free YAMNet sound classifier (Apache-2.0) through MediaPipe Audio Tasks. The model is a ~4 MB file at `/models/yamnet.tflite`, downloaded by `npm run voice:model`. The WASM runtime is bundled by Vite as same-origin assets, so no CDN is used. Twice a second, the last 1 second of audio (`AudioWindow.snapshot()`) is classified, and only the "Screaming" score is read. `ScreamGate` starts the SOS countdown only when that score is at least 0.5 in 2 of the last 3 checks, about one second of sustained screaming. A single loud bang or shout does not trigger it. The thresholds are uncalibrated starting values: shouting, singing or TV audio may trigger it, and the countdown lets you cancel.
+
+**MediaPipe metrics.** MediaPipe tries to send usage metrics (not audio) to `odml.pa.googleapis.com` every 60 seconds. The production CSP `connect-src 'self'` blocks this, and the Vite dev server sends the same header. A 70-second headless run recorded zero external requests, with the blocked attempt visible in the console.
 
 **Limits.** Accuracy has not been measured across speakers, accents or noise. Random noise can make the grammar output a single phrase word (for example, "hey"), which is why the full phrase and per-word confidence are required. Foreground only: locked-screen or background listening needs a native plugin.
 

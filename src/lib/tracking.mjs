@@ -1,5 +1,6 @@
 // shortcut: persistence thresholds are experimental, calibrate on real devices before drawing conclusions.
-export function summarizeDevice(observations, trusted = false) {
+// An identified tracker that reports being away from its owner is stronger evidence, so it needs fewer sessions.
+export function summarizeDevice(observations, trusted = false, tracker = null) {
   const sessions = new Set(observations.map((o) => o.session)),
     moved = new Set(observations.filter((o) => o.moved).map((o) => o.session));
   const first = observations[0],
@@ -8,7 +9,11 @@ export function summarizeDevice(observations, trusted = false) {
   return {
     sessions: sessions.size,
     movedSessions: moved.size,
-    persistent: !trusted && sessions.size >= 3 && moved.size >= 2,
+    persistent:
+      !trusted &&
+      (tracker?.separated
+        ? sessions.size >= 2 && moved.size >= 1
+        : sessions.size >= 3 && moved.size >= 2),
     trend:
       change > 4
         ? "Signal getting stronger"
@@ -41,6 +46,7 @@ export function appendObservation(devices, observation) {
   const item = {
     id: observation.id,
     name: observation.name,
+    tracker: observation.tracker ?? found?.tracker ?? null,
     observations: [
       ...(found?.observations || []),
       {

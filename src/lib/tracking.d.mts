@@ -4,10 +4,17 @@ export type Observation = {
   session: string;
   moved: boolean;
 };
-export type Device = { id: string; name: string; observations: Observation[] };
+import type { Tracker } from "./ble.mjs";
+export type Device = {
+  id: string;
+  name: string;
+  tracker: Tracker | null;
+  observations: Observation[];
+};
 export function summarizeDevice(
   observations: Observation[],
   trusted?: boolean,
+  tracker?: Tracker | null,
 ): {
   sessions: number;
   movedSessions: number;
@@ -21,5 +28,9 @@ export function approximateDistance(
 ): number;
 export function appendObservation(
   devices: Device[],
-  observation: Observation & { id: string; name: string },
+  observation: Observation & {
+    id: string;
+    name: string;
+    tracker?: Tracker | null;
+  },
 ): Device[];

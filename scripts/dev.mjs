@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createApp } from "../backend/server.mjs";
 import { features } from "../backend/features.mjs";
+import { startTelegramPolling } from "../backend/telegram.mjs";
 
 // Let the OS select a free API port, then give Vite that exact proxy target.
 const api = createApp(features);
@@ -20,6 +21,7 @@ api.once("error", (error) => {
 api.listen(0, "127.0.0.1", () => {
   const target = `http://127.0.0.1:${api.address().port}`;
   console.log("RESQ-X development API: " + target);
+  startTelegramPolling();
   web = spawn(
     process.execPath,
     ["node_modules/vite/bin/vite.js", "--host", "0.0.0.0"],

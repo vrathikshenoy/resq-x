@@ -1293,6 +1293,10 @@ input::placeholder {
   font-size: 10px;
   margin-top: 5px;
 }
+.device-item .tracker-note {
+  color: var(--coral);
+  font-weight: 600;
+}
 .verification {
   display: inline-flex;
   align-items: center;
@@ -1325,6 +1329,27 @@ input::placeholder {
   padding: 12px;
   border-radius: 8px;
   font-size: 11px;
+}
+.invite-panel {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  background: #eef6f2;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+.invite-panel input {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 11px;
+}
+.invite-panel .button {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-size: 10px;
 }
 .remove-confirm .button {
   min-height: 32px;
@@ -1374,6 +1399,19 @@ input::placeholder {
   text-align: center;
   color: #183b3b;
   box-shadow: 0 20px 90px #18362f33;
+}
+.sos-fallbacks {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 10px;
+}
+a.button.secondary {
+  color: inherit;
+}
+.delivery-list {
+  text-align: left;
+  font-size: 12px;
+  padding-left: 18px;
 }
 .sos-dialog::backdrop {
   background: #163f3c66;

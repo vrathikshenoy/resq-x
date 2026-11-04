@@ -7,11 +7,11 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "node --watch scripts/dev.mjs",
+    "dev": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --watch scripts/dev.mjs",
     "dev:web": "vite --host 0.0.0.0",
     "dev:api": "node --watch backend/server.mjs",
     "build": "tsc --noEmit && vite build && node scripts/build-sw.mjs",
-    "start": "node --env-file-if-exists=.env backend/server.mjs",
+    "start": "node --env-file-if-exists=.env --env-file-if-exists=.env.local backend/server.mjs",
     "test": "node tests/api.test.mjs && node tests/startup.test.mjs && node tests/ble.test.mjs && node scripts/test-ui.mjs",
     "test:e2e": "node tests/browser.mjs",
     "native:sync": "npm run build && npx --no-install cap sync",
@@ -25,7 +25,8 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "lucide-react": "0.454.0",
-    "vosk-browser": "0.0.8"
+    "vosk-browser": "0.0.8",
+    "@mediapipe/tasks-audio": "1.1.1"
   },
   "devDependencies": {
     "@types/react": "19.1.2",

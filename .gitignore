@@ -10,3 +10,4 @@ playwright-report/
 android/
 ios/
 public/models/
+.env.local

@@ -1,17 +1,53 @@
 import { randomUUID } from "node:crypto";
 import { db } from "./db.mjs";
 import { fail, json, text } from "./http.mjs";
-export function contactFeatures({ path, method, data, user, res }) {
+import {
+  inviteLink,
+  sendMessage,
+  sosMessage,
+  telegramEnabled,
+} from "./telegram.mjs";
+const publicAlert = ({ user_id, request_id, ...a }) => {
+  const recipients = JSON.parse(a.recipients);
+  return {
+    ...a,
+    recipients,
+    simulation: recipients.every((r) => r.channel !== "telegram"),
+  };
+};
+export async function contactFeatures({ path, method, data, user, res }) {
   if (path === "/api/v1/contacts" && method === "GET") {
     json(
       res,
       200,
       db
         .prepare(
-          "SELECT id,name,phone,relation,verified FROM contacts WHERE user_id=? ORDER BY rowid",
+          "SELECT id,name,phone,relation,verified,telegram_chat_id IS NOT NULL AS telegram FROM contacts WHERE user_id=? ORDER BY rowid",
         )
         .all(user.id),
     );
+    return true;
+  }
+  const invite = path.match(/^\/api\/v1\/contacts\/([a-f0-9-]+)\/telegram$/);
+  if (invite && method === "POST") {
+    if (!telegramEnabled())
+      fail(
+        503,
+        "Telegram alerts are not set up on this server. Set TELEGRAM_BOT_TOKEN and restart it.",
+      );
+    if (
+      !db
+        .prepare("SELECT id FROM contacts WHERE id=? AND user_id=?")
+        .get(invite[1], user.id)
+    )
+      fail(404, "Contact not found.");
+    let link;
+    try {
+      link = await inviteLink(invite[1], user.id);
+    } catch (e) {
+      fail(502, "Telegram could not be reached: " + e.message);
+    }
+    json(res, 200, { link });
     return true;
   }
   const match = path.match(/^\/api\/v1\/contacts\/([a-f0-9-]+)$/);
@@ -46,8 +82,8 @@ export function contactFeatures({ path, method, data, user, res }) {
     const id = match?.[1] || randomUUID();
     if (match)
       db.prepare(
-        "UPDATE contacts SET name=?,relation=?,verified=CASE WHEN phone=? THEN verified ELSE 0 END,phone=? WHERE id=? AND user_id=?",
-      ).run(name, relation, phone, phone, id, user.id);
+        "UPDATE contacts SET name=?,relation=?,verified=CASE WHEN phone=? THEN verified ELSE 0 END,telegram_chat_id=CASE WHEN phone=? THEN telegram_chat_id ELSE NULL END,phone=? WHERE id=? AND user_id=?",
+      ).run(name, relation, phone, phone, phone, id, user.id);
     else
       db.prepare(
         "INSERT INTO contacts (id,user_id,name,phone,relation) VALUES (?,?,?,?,?)",
@@ -95,10 +131,7 @@ export function contactFeatures({ path, method, data, user, res }) {
           "SELECT * FROM alerts WHERE user_id=? ORDER BY created DESC LIMIT 50",
         )
         .all(user.id)
-        .map(({ user_id, request_id, ...a }) => ({
-          ...a,
-          recipients: JSON.parse(a.recipients),
-        })),
+        .map(publicAlert),
     );
     return true;
   }
@@ -111,14 +144,9 @@ export function contactFeatures({ path, method, data, user, res }) {
     const old = db
       .prepare("SELECT * FROM alerts WHERE user_id=? AND request_id=?")
       .get(user.id, requestId);
+    // A retry with the same request ID returns the first result and never re-sends.
     if (old) {
-      json(res, 200, {
-        ...old,
-        user_id: undefined,
-        request_id: undefined,
-        recipients: JSON.parse(old.recipients),
-        simulation: true,
-      });
+      json(res, 200, publicAlert(old));
       return true;
     }
     let latitude = null,
@@ -135,20 +163,15 @@ export function contactFeatures({ path, method, data, user, res }) {
         fail(422, "Invalid location coordinates.");
     }
     const contacts = db
-      .prepare("SELECT id,name FROM contacts WHERE user_id=? AND verified=1")
+      .prepare(
+        "SELECT id,name,telegram_chat_id FROM contacts WHERE user_id=? AND verified=1",
+      )
       .all(user.id);
     if (!contacts.length)
-      fail(
-        409,
-        "Add a contact and complete simulated verification before testing SOS.",
-      );
+      fail(409, "Add a contact and verify them before sending an SOS.");
     const id = randomUUID(),
       created = new Date().toISOString();
-    const recipients = contacts.map((c) => ({
-      contact_id: c.id,
-      name: c.name,
-      status: "simulated_delivered",
-    }));
+    // Reserve the request ID first so a concurrent duplicate cannot send twice.
     db.prepare("INSERT INTO alerts VALUES (?,?,?,?,?,?,?,?,?)").run(
       id,
       user.id,
@@ -157,19 +180,47 @@ export function contactFeatures({ path, method, data, user, res }) {
       created,
       latitude,
       longitude,
-      "simulated_delivered",
-      JSON.stringify(recipients),
+      "sending",
+      "[]",
     );
-    json(res, 201, {
+    const message = sosMessage(user.name, data.type, latitude, longitude);
+    const recipients = await Promise.all(
+      contacts.map(async (c) => {
+        const base = { contact_id: c.id, name: c.name };
+        if (!c.telegram_chat_id)
+          return {
+            ...base,
+            channel: "simulation",
+            status: "simulated_delivered",
+          };
+        try {
+          await sendMessage(c.telegram_chat_id, message);
+          return { ...base, channel: "telegram", status: "sent" };
+        } catch (e) {
+          return {
+            ...base,
+            channel: "telegram",
+            status: "failed",
+            error: e.message.slice(0, 160),
+          };
+        }
+      }),
+    );
+    const status = recipients.some((r) => r.status === "sent")
+      ? "sent"
+      : recipients.some((r) => r.status === "failed")
+        ? "failed"
+        : "simulated_delivered";
+    db.prepare("UPDATE alerts SET status=?, recipients=? WHERE id=?").run(
+      status,
+      JSON.stringify(recipients),
       id,
-      type: data.type,
-      created,
-      latitude,
-      longitude,
-      status: "simulated_delivered",
-      recipients,
-      simulation: true,
-    });
+    );
+    json(
+      res,
+      201,
+      publicAlert(db.prepare("SELECT * FROM alerts WHERE id=?").get(id)),
+    );
     return true;
   }
   return false;

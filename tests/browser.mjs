@@ -42,15 +42,15 @@ try {
   await page
     .getByRole("button", { name: "Simulate verification", exact: true })
     .click();
-  await page.getByText("Verified in simulation", { exact: true }).waitFor();
-  await page.getByRole("button", { name: "Practice an SOS" }).click();
+  await page.getByText("Verified in simulation", { exact: false }).waitFor();
+  await page.getByRole("button", { name: "Start an SOS" }).click();
   await page.getByRole("dialog").waitFor();
   await page.getByRole("button", { name: "Cancel — I’m okay" }).click();
   assert.equal(await page.getByRole("dialog").count(), 0);
   await page.getByText("No alerts yet.", { exact: false }).waitFor();
-  await page.getByRole("button", { name: "Practice an SOS" }).click();
+  await page.getByRole("button", { name: "Start an SOS" }).click();
   await page
-    .getByRole("heading", { name: "Your test alert is recorded." })
+    .getByRole("heading", { name: "Your practice alert is recorded." })
     .waitFor({ timeout: 15000 });
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await page.getByText("Simulated manual alert", { exact: true }).waitFor();

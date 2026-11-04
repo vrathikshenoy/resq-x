@@ -1,9 +1,34 @@
 import { useEffect, useRef, useState } from "react";
-import { LifeBuoy, Check, X, TriangleAlert } from "lucide-react";
+import {
+  LifeBuoy,
+  Check,
+  X,
+  TriangleAlert,
+  Phone,
+  MessageSquare,
+} from "lucide-react";
 import { api } from "./api";
-import type { AlertRecord } from "./Contacts";
+import { deliveryLabel, type AlertRecord, type Contact } from "./Contacts";
+type Location = { latitude: number; longitude: number } | null;
+const mapLink = (l: NonNullable<Location>) =>
+  `https://www.openstreetmap.org/?mlat=${l.latitude}&mlon=${l.longitude}#map=17/${l.latitude}/${l.longitude}`;
+// Opens the phone's SMS app with every contact and the message filled in; the user taps Send. Free, no server.
+// "?&body=" is the form both Android and iOS accept.
+function smsHref(contacts: Contact[], location: Location) {
+  const body = `SOS: I need help. ${location ? "My location: " + mapLink(location) + " " : ""}Please call me. (RESQ-X)`;
+  return `sms:${contacts.map((c) => c.phone).join(",")}?&body=${encodeURIComponent(body)}`;
+}
 export type Trigger = "manual" | "phrase" | "scream";
-export function SOS({ type, onClose }: { type: Trigger; onClose: () => void }) {
+export function SOS({
+  type,
+  contacts,
+  onClose,
+}: {
+  type: Trigger;
+  contacts: Contact[];
+  onClose: () => void;
+}) {
+  const live = contacts.some((c) => c.verified && c.telegram);
   const [seconds, setSeconds] = useState(10),
     [stage, setStage] = useState<"countdown" | "sending" | "done" | "error">(
       "countdown",
@@ -19,7 +44,8 @@ export function SOS({ type, onClose }: { type: Trigger; onClose: () => void }) {
     locationChoice = useRef(false),
     sent = useRef(false),
     alive = useRef(true),
-    payload = useRef<unknown>(null);
+    payload = useRef<{ location: Location } | null>(null),
+    calling = useRef(false);
   useEffect(() => {
     alive.current = true;
     const previous = document.activeElement as HTMLElement;
@@ -62,7 +88,11 @@ export function SOS({ type, onClose }: { type: Trigger; onClose: () => void }) {
             );
           }
         }
-        payload.current = { request_id: requestId.current, type, location };
+        payload.current = {
+          request_id: requestId.current,
+          type,
+          location,
+        } as { location: Location };
       }
       const record = await api<AlertRecord>("/alerts/trigger", payload.current);
       if (alive.current) {
@@ -89,7 +119,8 @@ export function SOS({ type, onClose }: { type: Trigger; onClose: () => void }) {
     };
     const id = setInterval(update, 150);
     const hidden = () => {
-      if (document.hidden) {
+      // Opening the dialer for 112 hides the page; that must not cancel the alert.
+      if (document.hidden && !calling.current) {
         onClose();
       }
     };
@@ -100,6 +131,21 @@ export function SOS({ type, onClose }: { type: Trigger; onClose: () => void }) {
       document.removeEventListener("visibilitychange", hidden);
     };
   }, [stage]);
+  const fallbacks = (
+    <div className="sos-fallbacks">
+      <a
+        className="button secondary full"
+        href={smsHref(contacts, payload.current?.location ?? null)}
+      >
+        <MessageSquare size={17} />
+        Also text them by SMS
+      </a>
+      <a className="button danger full" href="tel:112">
+        <Phone size={17} />
+        Call 112
+      </a>
+    </div>
+  );
   return (
     <dialog
       ref={dialog}
@@ -110,19 +156,29 @@ export function SOS({ type, onClose }: { type: Trigger; onClose: () => void }) {
         if (stage !== "sending") onClose();
       }}
     >
-      <span className="pill coral">Simulation only · no SMS sent</span>
+      <span className="pill coral">
+        {live
+          ? "Real alert · Telegram contacts"
+          : "Practice · no message is sent"}
+      </span>
       {stage === "countdown" ? (
         <>
           <div className="countdown-ring">
             <strong aria-live="off">{seconds}</strong>
             <small>seconds to cancel</small>
           </div>
-          <h2 id="sos-title">A test alert is about to start.</h2>
+          <h2 id="sos-title">
+            {live
+              ? "An SOS alert is about to be sent."
+              : "A practice alert is about to start."}
+          </h2>
           <p>
             {type === "manual"
-              ? "You started a practice SOS."
-              : `A ${type} trigger started this practice countdown.`}{" "}
-            Your verified demo contacts will receive a mock alert record.
+              ? "You started an SOS."
+              : `Your ${type === "phrase" ? "emergency phrase" : "scream detection"} started this countdown.`}{" "}
+            {live
+              ? "Contacts who joined on Telegram will get a real message."
+              : "No contact has joined on Telegram, so nothing will be sent. You can text them by SMS afterwards."}
           </p>
           <label className="check-label">
             <input
@@ -149,28 +205,54 @@ export function SOS({ type, onClose }: { type: Trigger; onClose: () => void }) {
             <X size={18} />
             Cancel — I’m okay
           </button>
+          <a
+            className="button danger full"
+            href="tel:112"
+            onClick={() => {
+              calling.current = true;
+              void send();
+            }}
+          >
+            <Phone size={17} />
+            Call 112 and send now
+          </a>
           <p className="fine-print">
-            Leaving the app during the countdown cancels this test.
+            Leaving the app during the countdown cancels this alert.
           </p>
         </>
       ) : stage === "sending" ? (
         <>
           <LifeBuoy size={48} className="dialog-icon" />
-          <h2 id="sos-title">Recording your test alert…</h2>
-          <p>No real SMS is being sent. Please keep the app open.</p>
+          <h2 id="sos-title">
+            {live ? "Sending your alert…" : "Recording your practice alert…"}
+          </h2>
+          <p>Please keep the app open.</p>
         </>
       ) : stage === "done" ? (
         <>
           <span className="success-icon">
             <Check size={32} />
           </span>
-          <h2 id="sos-title">Your test alert is recorded.</h2>
-          <p>
-            Simulated delivery to{" "}
-            {result?.recipients.map((r) => r.name).join(", ")}.
-          </p>
-          <div className="notice">No actual messages were sent.</div>
+          <h2 id="sos-title">
+            {result?.status === "sent"
+              ? "Your alert was sent."
+              : result?.status === "failed"
+                ? "Telegram couldn’t deliver your alert."
+                : "Your practice alert is recorded."}
+          </h2>
+          <ul className="delivery-list">
+            {result?.recipients.map((r) => (
+              <li key={r.name + r.status}>{deliveryLabel(r)}</li>
+            ))}
+          </ul>
+          {result?.status !== "sent" && (
+            <div className="notice">
+              No message reached anyone through the app. Text or call them
+              yourself.
+            </div>
+          )}
           {locationNote && <p className="small-text">{locationNote}</p>}
+          {fallbacks}
           <button className="button primary full" onClick={onClose}>
             Done <Check size={16} />
           </button>
@@ -178,13 +260,14 @@ export function SOS({ type, onClose }: { type: Trigger; onClose: () => void }) {
       ) : (
         <>
           <TriangleAlert size={42} className="dialog-icon" />
-          <h2 id="sos-title">The test alert wasn’t confirmed.</h2>
+          <h2 id="sos-title">The alert wasn’t confirmed.</h2>
           <p className="error" role="alert">
             {error}
           </p>
           <p className="small-text">
-            Retrying uses the same alert ID to prevent duplicate records.
+            Retrying uses the same alert ID, so nobody gets it twice.
           </p>
+          {fallbacks}
           <div className="row">
             <button className="button secondary grow" onClick={onClose}>
               Close
