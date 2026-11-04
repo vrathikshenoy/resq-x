@@ -1400,10 +1400,45 @@ input::placeholder {
   color: #183b3b;
   box-shadow: 0 20px 90px #18362f33;
 }
-.sos-fallbacks {
+.sos-actions {
   display: grid;
   gap: 10px;
-  margin: 14px 0 10px;
+  margin: 16px 0 10px;
+}
+.check-label {
+  display: flex;
+  text-align: left;
+  align-items: center;
+  gap: 10px;
+  background: #f7f9f8;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 11px;
+}
+.check-label input {
+  width: 17px;
+  min-height: 17px;
+  height: 17px;
+  accent-color: var(--teal);
+}
+.check-label small {
+  font-size: 9px;
+  line-height: 1.6;
+}
+.location-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  background: #f7f9f8;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.location-note svg {
+  flex: none;
+  color: var(--teal);
 }
 a.button.secondary {
   color: inherit;
@@ -1443,26 +1478,6 @@ a.button.secondary {
 .countdown-ring small {
   font-size: 10px;
   color: #bd897c;
-}
-.check-label {
-  display: flex;
-  text-align: left;
-  align-items: center;
-  gap: 10px;
-  background: #f7f9f8;
-  border-radius: 8px;
-  padding: 12px;
-  font-size: 11px;
-}
-.check-label input {
-  width: 17px;
-  min-height: 17px;
-  height: 17px;
-  accent-color: var(--teal);
-}
-.check-label small {
-  font-size: 9px;
-  line-height: 1.6;
 }
 .success-icon {
   display: grid;

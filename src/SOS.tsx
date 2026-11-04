@@ -6,6 +6,7 @@ import {
   TriangleAlert,
   Phone,
   MessageSquare,
+  MapPin,
 } from "lucide-react";
 import { api } from "./api";
 import { deliveryLabel, type AlertRecord, type Contact } from "./Contacts";
@@ -132,7 +133,7 @@ export function SOS({
     };
   }, [stage]);
   const fallbacks = (
-    <div className="sos-fallbacks">
+    <div className="sos-actions">
       <a
         className="button secondary full"
         href={smsHref(contacts, payload.current?.location ?? null)}
@@ -180,29 +181,34 @@ export function SOS({
               ? "Contacts who joined on Telegram will get a real message."
               : "No contact has joined on Telegram, so nothing will be sent. You can text them by SMS afterwards."}
           </p>
-          <p className="small-text">
-            Your current location is included. If your browser asks, allow
-            location access.
+          <p className="location-note">
+            <MapPin size={16} />
+            <span>
+              Your current location is included. If your browser asks, allow
+              location access.
+            </span>
           </p>
-          <button
-            ref={cancel}
-            className="button secondary full"
-            onClick={onClose}
-          >
-            <X size={18} />
-            Cancel — I’m okay
-          </button>
-          <a
-            className="button danger full"
-            href="tel:112"
-            onClick={() => {
-              calling.current = true;
-              void send();
-            }}
-          >
-            <Phone size={17} />
-            Call 112 and send now
-          </a>
+          <div className="sos-actions">
+            <button
+              ref={cancel}
+              className="button secondary full"
+              onClick={onClose}
+            >
+              <X size={18} />
+              Cancel — I’m okay
+            </button>
+            <a
+              className="button danger full"
+              href="tel:112"
+              onClick={() => {
+                calling.current = true;
+                void send();
+              }}
+            >
+              <Phone size={17} />
+              Call 112 and send now
+            </a>
+          </div>
           <p className="fine-print">
             Leaving the app during the countdown cancels this alert.
           </p>
